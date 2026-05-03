@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Order Portal</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- PapaParse for reading CSV files dynamically -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- Tailwind CSS with Custom Config -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2d6a4f',
+                        'border-soft': '#e5e9e6',
+                        'bg-light': '#f4f7f5',
+                        'bg-card-img': '#fcfcfc'
+                    },
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts: Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { background-color: #f4f7f5; font-family: 'Poppins', sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Toast Animation */
+        @keyframes toastFadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(10px); }
+        }
+        .toast-enter { animation: toastFadeInUp 0.3s ease forwards; }
+        .toast-exit { animation: toastFadeOut 0.3s ease forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- TELEGRAM CONFIGURATION ---
+        const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'; 
+        const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID';     
+
+        const Toast = ({ message, isVisible }) => {
+            if (!isVisible) return null;
+            return (
+                <div className="fixed bottom-8 right-8 z-[9999] toast-enter">
+                    <div className="bg-primary text-white px-5 py-3 rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center gap-3 font-medium">
+                        <i data-lucide="check-circle" className="w-5 h-5"></i>
+                        {message}
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [categories, setCategories] = useState([]);
+            const [products, setProducts] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [dataError, setDataError] = useState(null);
+
+            const [selectedCategory, setSelectedCategory] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [cart, setCart] = useState([]);
+            const [isCartOpen, setIsCartOpen] = useState(false);
+            const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+            const [checkoutData, setCheckoutData] = useState({ name: '', phone: '', email: '', address: '' });
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [toastConfig, setToastConfig] = useState({ visible: false, message: '' });
+
+            // Fetch and parse the CSV files automatically
+            useEffect(() => {
+                const loadStoreData = async () => {
+                    try {
+                        // 1. Fetch Categories
+                        let catText = await (await fetch('./category.csv')).text();
+                        const catHeaderIdx = catText.split('\n').findIndex(l => l.includes('CategoryID'));
+                        if (catHeaderIdx > 0) catText = catText.split('\n').slice(catHeaderIdx).join('\n');
+                        const catData = Papa.parse(catText, { header: true, skipEmptyLines: true }).data;
+
+                        const parsedCategories = catData.map(c => ({
+                            id: parseInt(c.CategoryID),
+                            parentId: c.ParentCategoryID === 'NULL' || !c.ParentCategoryID ? null : parseInt(c.ParentCategoryID),
+                            name: c.CategoryName
+                        })).filter(c => !isNaN(c.id));
+
+                        // 2. Fetch Product Category Mappings
+                        let mapText = await (await fetch('./productcategories.csv')).text();
+                        const mapData = Papa.parse(mapText, { header: false, skipEmptyLines: true }).data;
+                        const mappings = {};
+                        mapData.forEach(row => {
+                            if (row[0] === 'ProductID') return; // skip header if present
+                            const pId = parseInt(row[0]);
+                            const cId = parseInt(row[1]);
+                            if (!isNaN(pId) && !isNaN(cId)) {
+                                if (!mappings[pId]) mappings[pId] = [];
+                                mappings[pId].push(cId);
+                            }
+                        });
+
+                        // 3. Fetch Products
+                        let prodText = await (await fetch('./products.csv')).text();
+                        const prodHeaderIdx = prodText.split('\n').findIndex(l => l.includes('ProductID'));
+                        if (prodHeaderIdx > 0) prodText = prodText.split('\n').slice(prodHeaderIdx).join('\n');
+                        const prodData = Papa.parse(prodText, { header: true, skipEmptyLines: true }).data;
+
+                        const parsedProducts = prodData.map(p => {
+                            const id = parseInt(p.ProductID);
+                            let catIds = mappings[id] || [];
+                            // Fallback if mapping missing but category set in main file
+                            if (catIds.length === 0 && p.CategoryID && p.CategoryID !== 'NULL') {
+                                catIds = [parseInt(p.CategoryID)];
+                            }
+                            
+                            // Adjust image path for GitHub pages (relative path)
+                            let imgPath = p.MainImagePath || '';
+                            if (imgPath.startsWith('/')) imgPath = '.' + imgPath;
+
+                            return {
+                                id: id,
+                                categoryIds: catIds,
+                                name: p.ProductName,
+                                price: parseFloat(p.Price) || 0,
+                                image: imgPath,
+                                isActive: p.IsActive === undefined || p.IsActive === '1' || String(p.IsActive).toLowerCase() === 'true'
+                            };
+                        }).filter(p => !isNaN(p.id) && p.name && p.isActive);
+
+                        setCategories(parsedCategories);
+                        setProducts(parsedProducts);
+                        setIsLoading(false);
+                    } catch (err) {
+                        console.error(err);
+                        setDataError("Could not load store data. Please ensure 'category.csv', 'products.csv', and 'productcategories.csv' are uploaded to the exact same folder as this file on GitHub.");
+                        setIsLoading(false);
+                    }
+                };
+
+                loadStoreData();
+            }, []);
+
+            // Re-initialize lucide icons
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            });
+
+            const showToast = (message) => {
+                setToastConfig({ visible: true, message });
+                setTimeout(() => {
+                    setToastConfig(prev => ({ ...prev, visible: false }));
+                }, 3000);
+            };
+
+            // Helper to get selected category + all its subcategory IDs dynamically
+            const getCategoryAndDescendants = (catId) => {
+                let ids = [catId];
+                const children = categories.filter(c => c.parentId === catId).map(c => c.id);
+                children.forEach(childId => {
+                    ids = ids.concat(getCategoryAndDescendants(childId));
+                });
+                return ids;
+            };
+
+            const filteredProducts = useMemo(() => {
+                let result = products;
+                
+                if (selectedCategory !== null) {
+                    const validCatIds = getCategoryAndDescendants(selectedCategory);
+                    result = result.filter(p => p.categoryIds.some(id => validCatIds.includes(id)));
+                }
+
+                if (searchQuery.trim() !== '') {
+                    const lowerQ = searchQuery.toLowerCase();
+                    result = result.filter(p => p.name.toLowerCase().includes(lowerQ));
+                }
+                
+                return result;
+            }, [selectedCategory, searchQuery, products, categories]);
+
+            // Helper for mobile horizontal scroll to flatten categories nicely
+            const flatCategories = useMemo(() => {
+                const list = [];
+                categories.filter(c => c.parentId === null).forEach(parent => {
+                    list.push({ ...parent, displayName: parent.name, isChild: false });
+                    categories.filter(c => c.parentId === parent.id).forEach(child => {
+                        list.push({ ...child, displayName: child.name, isChild: true });
+                    });
+                });
+                return list;
+            }, [categories]);
+
+            const addToCart = (product) => {
+                setCart(prev => {
+                    const existing = prev.find(item => item.id === product.id);
+                    if (existing) {
+                        return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+                    }
+                    return [...prev, { ...product, qty: 1 }];
+                });
+                showToast("Added to cart!");
+            };
+
+            const updateQty = (id, delta) => {
+                setCart(prev => {
+                    return prev.map(item => {
+                        if (item.id === id) {
+                            const newQty = item.qty + delta;
+                            return newQty > 0 ? { ...item, qty: newQty } : item;
+                        }
+                        return item;
+                    }).filter(item => item.qty > 0);
+                });
+            };
+
+            const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
+
+            const handleCheckoutSubmit = async (e) => {
+                e.preventDefault();
+                setIsSubmitting(true);
+
+                let message = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
+                message += `👤 *Customer:* ${checkoutData.name}\n`;
+                message += `📞 *Phone:* ${checkoutData.phone}\n`;
+                if(checkoutData.email) message += `📧 *Email:* ${checkoutData.email}\n`;
+                message += `📍 *Address:* ${checkoutData.address}\n\n`;
+                message += `📦 *Items Ordered:*\n`;
+                
+                cart.forEach((item, index) => {
+                    message += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price} = ₹${item.qty * item.price}\n`;
+                });
+
+                message += `\n💰 *Subtotal:* ₹${cartTotal}\n`;
+                message += `\n📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
+
+                try {
+                    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: TELEGRAM_CHAT_ID,
+                            text: message,
+                            parse_mode: 'Markdown'
+                        })
+                    });
+
+                    if (response.ok) {
+                        alert("Order placed successfully! We will contact you soon to confirm the order.");
+                        setCart([]);
+                        setIsCheckoutOpen(false);
+                        setIsCartOpen(false);
+                        setCheckoutData({ name: '', phone: '', email: '', address: '' });
+                    } else {
+                        alert("Error placing order. Please check your Bot configurations.");
+                    }
+                } catch (error) {
+                    alert("Network error. Please try again.");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            if (isLoading) {
+                return (
+                    <div className="flex h-screen items-center justify-center bg-bg-light text-primary flex-col gap-4">
+                        <i data-lucide="loader-2" className="animate-spin w-10 h-10"></i>
+                        <p className="font-semibold text-lg">Loading Store Catalog...</p>
+                    </div>
+                );
+            }
+
+            if (dataError) {
+                return (
+                    <div className="flex h-screen items-center justify-center bg-bg-light p-6">
+                        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-lg text-center border border-red-100">
+                            <i data-lucide="info" className="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+                            <h2 className="text-xl font-bold text-gray-800 mb-2">Setup Required</h2>
+                            <p className="text-gray-600 mb-4">{dataError}</p>
+                            <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg text-left">
+                                <strong>Checklist:</strong><br/>
+                                1. Ensure files are named exactly: <code>products.csv</code>, <code>category.csv</code>, <code>productcategories.csv</code><br/>
+                                2. Ensure they are in the same directory as this HTML file on GitHub.<br/>
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="flex h-screen overflow-hidden bg-bg-light text-gray-800 selection:bg-primary selection:text-white">
+                    
+                    <Toast message={toastConfig.message} isVisible={toastConfig.visible} />
+
+                    {/* SIDEBAR CATEGORIES */}
+                    <aside className="w-64 bg-white border-r border-border-soft flex-col hidden md:flex h-full shadow-[0_10px_40px_rgba(0,0,0,0.03)] z-20 relative">
+                        <div className="p-6 bg-primary text-white font-bold text-xl tracking-wide shadow-sm">
+                            <span className="flex items-center gap-2"><i data-lucide="store"></i> Private Store</span>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-4">
+                            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Categories</h3>
+                            
+                            <button 
+                                onClick={() => { setSelectedCategory(null); setSearchQuery(''); }}
+                                className={`w-full text-left px-4 py-2.5 mb-1 rounded-lg transition-all duration-200 ${selectedCategory === null ? 'bg-[#ebf2ef] text-primary font-semibold border-l-4 border-primary' : 'hover:bg-gray-50 text-gray-600 border-l-4 border-transparent'}`}
+                            >
+                                All Products
+                            </button>
+
+                            {categories.filter(c => c.parentId === null).map(parentCat => (
+                                <div key={parentCat.id} className="mb-1">
+                                    <button 
+                                        onClick={() => { setSelectedCategory(parentCat.id); setSearchQuery(''); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg transition-all duration-200 ${selectedCategory === parentCat.id ? 'bg-[#ebf2ef] text-primary font-semibold border-l-4 border-primary' : 'hover:bg-gray-50 text-gray-600 border-l-4 border-transparent'}`}
+                                    >
+                                        {parentCat.name}
+                                    </button>
+                                    
+                                    {/* Render Nested Subcategories if they exist */}
+                                    {categories.filter(c => c.parentId === parentCat.id).length > 0 && (
+                                        <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-2 space-y-1">
+                                            {categories.filter(c => c.parentId === parentCat.id).map(childCat => (
+                                                <button 
+                                                    key={childCat.id}
+                                                    onClick={() => { setSelectedCategory(childCat.id); setSearchQuery(''); }}
+                                                    className={`w-full text-left px-4 py-1.5 text-sm rounded-lg transition-all duration-200 ${selectedCategory === childCat.id ? 'bg-[#ebf2ef] text-primary font-semibold' : 'hover:bg-gray-50 text-gray-500'}`}
+                                                >
+                                                    {childCat.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </aside>
+
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 flex flex-col h-full relative">
+                        
+                        {/* MOBILE HEADER */}
+                        <header className="md:hidden flex justify-between items-center bg-primary p-4 text-white shadow-md z-10">
+                            <h1 className="font-bold text-lg flex items-center gap-2"><i data-lucide="store" className="w-5 h-5"></i> Private Store</h1>
+                            <button onClick={() => setIsCartOpen(true)} className="relative p-2">
+                                <i data-lucide="shopping-cart"></i>
+                                {cartCount > 0 && (
+                                    <span className="absolute top-0 right-0 bg-[#e74c3c] text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-primary">
+                                        {cartCount}
+                                    </span>
+                                )}
+                            </button>
+                        </header>
+
+                        {/* MOBILE CATEGORY SCROLL */}
+                        <div className="md:hidden bg-white border-b border-border-soft overflow-x-auto hide-scrollbar whitespace-nowrap p-3 shadow-sm z-10 flex">
+                            <button 
+                                onClick={() => { setSelectedCategory(null); setSearchQuery(''); }}
+                                className={`inline-block px-5 py-1.5 mx-1 text-sm rounded-full transition-colors ${selectedCategory === null ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
+                            >
+                                All Products
+                            </button>
+                            {flatCategories.map(cat => (
+                                <button 
+                                    key={cat.id}
+                                    onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); }}
+                                    className={`inline-block px-5 py-1.5 mx-1 text-sm rounded-full transition-colors ${selectedCategory === cat.id ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
+                                >
+                                    {cat.displayName}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* PRODUCT GRID */}
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 max-w-7xl mx-auto gap-4">
+                                <div className="w-full md:w-auto">
+                                    <h2 className="text-2xl md:text-3xl font-bold text-gray-800 tracking-tight">
+                                        {categories.find(c => c.id === selectedCategory)?.name || 'All Products'}
+                                        {searchQuery && <span className="text-lg text-gray-500 font-normal ml-2 hidden md:inline">| Search: "{searchQuery}"</span>}
+                                    </h2>
+                                    <p className="text-gray-500 text-sm mt-1">Explore our premium selection</p>
+                                </div>
+                                
+                                <div className="flex items-center gap-3 w-full md:w-auto">
+                                    {/* Search Bar */}
+                                    <div className="relative flex-1 md:w-64">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search products..." 
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full pl-10 pr-8 py-2.5 bg-white border border-border-soft rounded-xl focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-sm shadow-sm"
+                                        />
+                                        <i data-lucide="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                                        {searchQuery && (
+                                            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                                <i data-lucide="x" className="w-4 h-4"></i>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <button 
+                                        onClick={() => setIsCartOpen(true)}
+                                        className="hidden md:flex items-center gap-2 bg-white border border-border-soft hover:border-primary text-primary px-5 py-2.5 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md font-medium"
+                                    >
+                                        <i data-lucide="shopping-cart" className="w-5 h-5"></i>
+                                        Cart
+                                        {cartCount > 0 && <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full ml-1">{cartCount}</span>}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 pb-24 max-w-7xl mx-auto">
+                                {filteredProducts.map(product => {
+                                    const inCart = cart.find(item => item.id === product.id);
+                                    return (
+                                        <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-border-soft overflow-hidden flex flex-col hover:shadow-[0_10px_40px_rgba(0,0,0,0.06)] transition-all duration-300 group relative">
+                                            <div className="h-44 md:h-52 bg-bg-card-img w-full relative flex items-center justify-center p-4 overflow-hidden border-b border-gray-50">
+                                                <img 
+                                                    src={product.image} 
+                                                    alt={product.name} 
+                                                    className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
+                                                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300.png?text=No+Image'; }}
+                                                />
+                                            </div>
+                                            <div className="p-4 flex-1 flex flex-col justify-between bg-white">
+                                                <div>
+                                                    <h3 className="text-sm md:text-base font-semibold text-gray-800 line-clamp-2 leading-snug mb-1 group-hover:text-primary transition-colors">{product.name}</h3>
+                                                </div>
+                                                <div className="mt-3">
+                                                    <div className="text-lg font-bold text-primary mb-3">₹{product.price.toFixed(2)}</div>
+                                                    
+                                                    {inCart ? (
+                                                        <div className="flex items-center justify-between border border-primary rounded-lg overflow-hidden bg-white">
+                                                            <button onClick={() => updateQty(product.id, -1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i data-lucide="minus" className="w-4 h-4"></i></button>
+                                                            <span className="font-semibold text-primary">{inCart.qty}</span>
+                                                            <button onClick={() => updateQty(product.id, 1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => addToCart(product)}
+                                                            className="w-full bg-white border border-primary text-primary hover:bg-primary hover:text-white py-2 rounded-lg font-semibold transition-all duration-200 text-sm flex justify-center items-center gap-2"
+                                                        >
+                                                            <i data-lucide="shopping-cart" className="w-4 h-4"></i> Add to Cart
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {filteredProducts.length === 0 && (
+                                    <div className="col-span-full py-16 text-center text-gray-500 flex flex-col items-center">
+                                        <i data-lucide="package-open" className="w-16 h-16 text-gray-300 mb-3"></i>
+                                        <p className="font-medium text-lg">No products found for this selection.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </main>
+
+                    {/* CART OVERLAY / SLIDEOUT */}
+                    {isCartOpen && (
+                        <div className="fixed inset-0 z-50 flex justify-end">
+                            {/* Backdrop */}
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCartOpen(false)}></div>
+                            
+                            {/* Panel */}
+                            <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-[slideIn_0.3s_ease-out]">
+                                <style>{`@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+                                
+                                <div className="p-5 border-b border-border-soft flex justify-between items-center bg-white">
+                                    <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
+                                        <i data-lucide="shopping-cart"></i> Your Cart
+                                    </h2>
+                                    <button onClick={() => setIsCartOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-bg-light">
+                                    {cart.length === 0 ? (
+                                        <div className="text-center py-12 text-gray-500 flex flex-col items-center">
+                                            <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                                                <i data-lucide="shopping-bag" className="w-10 h-10 text-gray-300"></i>
+                                            </div>
+                                            <p className="font-medium">Your cart is empty.</p>
+                                            <button onClick={() => setIsCartOpen(false)} className="mt-4 text-primary text-sm font-semibold hover:underline">Continue Shopping</button>
+                                        </div>
+                                    ) : (
+                                        cart.map(item => (
+                                            <div key={item.id} className="flex gap-4 p-3 bg-white rounded-xl shadow-sm border border-border-soft">
+                                                <div className="w-20 h-20 bg-bg-card-img rounded-lg border border-gray-100 p-1 flex-shrink-0">
+                                                    <img src={item.image} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" onError={(e) => { e.target.src = 'https://via.placeholder.com/100?text=No+Image'; }} />
+                                                </div>
+                                                <div className="flex-1 flex flex-col justify-between py-1">
+                                                    <h4 className="text-sm font-semibold text-gray-800 line-clamp-2 leading-tight">{item.name}</h4>
+                                                    <div className="flex items-center justify-between mt-2">
+                                                        <div className="text-primary font-bold text-sm">₹{item.price.toFixed(2)}</div>
+                                                        <div className="flex items-center justify-between border border-border-soft rounded-md bg-white w-20">
+                                                            <button onClick={() => updateQty(item.id, -1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i data-lucide="minus" className="w-3 h-3"></i></button>
+                                                            <span className="text-xs font-semibold">{item.qty}</span>
+                                                            <button onClick={() => updateQty(item.id, 1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i data-lucide="plus" className="w-3 h-3"></i></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {cart.length > 0 && (
+                                    <div className="p-5 border-t border-border-soft bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                                        <div className="flex justify-between items-center mb-4 text-lg">
+                                            <span className="font-semibold text-gray-600">Estimated Total:</span>
+                                            <span className="font-bold text-primary text-xl">₹{cartTotal.toFixed(2)}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-400 italic mb-4 text-right">* Final shipping confirmed prior to dispatch.</p>
+                                        <button 
+                                            onClick={() => setIsCheckoutOpen(true)}
+                                            className="w-full bg-primary hover:bg-[#20503b] text-white py-3.5 rounded-xl font-bold shadow-md transition-colors flex justify-center items-center gap-2"
+                                        >
+                                            Proceed to Secure Checkout <i data-lucide="arrow-right" className="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CHECKOUT MODAL */}
+                    {isCheckoutOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsCheckoutOpen(false)}></div>
+                            
+                            <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+                                <div className="p-5 border-b border-border-soft flex justify-between items-center">
+                                    <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+                                        <i data-lucide="lock" className="w-5 h-5"></i> Secure Checkout
+                                    </h2>
+                                    <button onClick={() => setIsCheckoutOpen(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+                                
+                                <div className="overflow-y-auto p-6 bg-white">
+                                    <form id="checkout-form" onSubmit={handleCheckoutSubmit} className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-1">Full Name</label>
+                                            <input 
+                                                required 
+                                                type="text" 
+                                                className="w-full p-3 bg-[#fafafa] border border-border-soft rounded-lg focus:ring-4 focus:ring-[#ebf2ef] focus:border-primary focus:outline-none transition-all"
+                                                value={checkoutData.name}
+                                                onChange={e => setCheckoutData({...checkoutData, name: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-1">Contact Number</label>
+                                                <input 
+                                                    required 
+                                                    type="tel" 
+                                                    className="w-full p-3 bg-[#fafafa] border border-border-soft rounded-lg focus:ring-4 focus:ring-[#ebf2ef] focus:border-primary focus:outline-none transition-all"
+                                                    value={checkoutData.phone}
+                                                    onChange={e => setCheckoutData({...checkoutData, phone: e.target.value})}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-1">Email (Optional)</label>
+                                                <input 
+                                                    type="email" 
+                                                    className="w-full p-3 bg-[#fafafa] border border-border-soft rounded-lg focus:ring-4 focus:ring-[#ebf2ef] focus:border-primary focus:outline-none transition-all"
+                                                    value={checkoutData.email}
+                                                    onChange={e => setCheckoutData({...checkoutData, email: e.target.value})}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-1">Complete Shipping Address</label>
+                                            <textarea 
+                                                required 
+                                                rows="3"
+                                                className="w-full p-3 bg-[#fafafa] border border-border-soft rounded-lg focus:ring-4 focus:ring-[#ebf2ef] focus:border-primary focus:outline-none resize-none transition-all"
+                                                value={checkoutData.address}
+                                                onChange={e => setCheckoutData({...checkoutData, address: e.target.value})}
+                                            ></textarea>
+                                        </div>
+                                        
+                                        <div className="bg-[#f8faf9] p-4 rounded-xl mt-6 border border-border-soft shadow-sm">
+                                            <div className="flex justify-between items-center text-lg font-bold text-gray-800">
+                                                <span>Total to Pay:</span>
+                                                <span className="text-primary text-xl">₹{cartTotal.toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex items-start gap-2 mt-3 text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
+                                                <i data-lucide="info" className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"></i>
+                                                <p>Payment and shipping instructions will be shared after order placement.</p>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div className="p-5 border-t border-border-soft bg-gray-50 rounded-b-2xl flex gap-3">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsCheckoutOpen(false)}
+                                        className="flex-1 py-3.5 bg-white border border-border-soft text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        form="checkout-form"
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-3.5 bg-primary text-white rounded-xl font-bold shadow hover:bg-[#20503b] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {isSubmitting ? (
+                                            <span className="flex items-center gap-2"><i data-lucide="loader-2" className="animate-spin w-5 h-5"></i> Processing...</span>
+                                        ) : (
+                                            <span className="flex items-center gap-2"><i data-lucide="check-circle" className="w-5 h-5"></i> Place Order</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
