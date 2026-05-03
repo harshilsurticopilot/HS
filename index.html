@@ -66,7 +66,7 @@
         const { useState, useEffect, useMemo } = React;
 
         // --- WEBHOOK CONFIGURATION (SECURE) ---
-        // Replace this with your actual webhook URL from Make.com
+        // REPLACE THIS URL WITH YOUR ACTUAL MAKE.COM WEBHOOK URL
         const ORDER_WEBHOOK_URL = 'https://hook.us2.make.com/c5b9g1rprsaqe3qn3apeb6nr0hhmycj9';
 
         const Toast = ({ message, isVisible }) => {
@@ -85,23 +85,14 @@
         const FormattedText = ({ text }) => {
             if (!text) return null;
             
-            // 1. Normalize line breaks and <br> tags
             let cleanText = text.replace(/<br\s*\/?>/gi, '\n').replace(/\\n/g, '\n');
-            
-            // 2. Force newline BEFORE bullet points and specific emojis (prevents them from sticking to the previous sentence)
             cleanText = cleanText.replace(/([^\n])\s*([•🌾📦✅👉✨])/g, '$1\n$2');
-            
-            // 3. Convert any remaining multiple spaces (2 or more) into line breaks
-            // (CSV exports often use multiple spaces instead of actual line breaks)
             cleanText = cleanText.replace(/\s{2,}/g, '\n');
-
-            // 4. Split into clean paragraphs
             const paragraphs = cleanText.split('\n').map(p => p.trim()).filter(p => p);
 
             return (
                 <div className="flex flex-col gap-3 text-[0.95rem] md:text-base text-gray-600">
                     {paragraphs.map((para, idx) => {
-                        // Render Standard Bullet Points (•)
                         if (para.startsWith('•')) {
                             const bulletText = para.substring(1).trim();
                             if (!bulletText) return null;
@@ -111,9 +102,7 @@
                                     <span className="flex-1 leading-relaxed">{bulletText}</span>
                                 </div>
                             );
-                        } 
-                        // Render Dash Bullet Points (- )
-                        else if (para.startsWith('- ')) {
+                        } else if (para.startsWith('- ')) {
                             const bulletText = para.substring(2).trim();
                             if (!bulletText) return null;
                             return (
@@ -122,15 +111,11 @@
                                     <span className="flex-1 leading-relaxed">{bulletText}</span>
                                 </div>
                             );
-                        }
-                        // Render lines starting with Emojis or ending with colons as Bold Subheadings
-                        else if (para.match(/^(🌾|📦|✅|👉|✨)/) || para.endsWith(':')) {
+                        } else if (para.match(/^(🌾|📦|✅|👉|✨)/) || para.endsWith(':')) {
                             return (
                                 <strong key={idx} className="text-gray-800 block mt-3 text-[1.05rem] tracking-tight">{para}</strong>
                             );
-                        } 
-                        // Standard Paragraph
-                        else {
+                        } else {
                             return <p key={idx} className="leading-relaxed">{para}</p>;
                         }
                     })}
@@ -160,30 +145,22 @@
                     try {
                         const cleanHeader = h => h.trim().replace(/^[\uFEFF\xA0]+|[\uFEFF\xA0]+$/g, '');
 
-                        // 1. Fetch Categories
                         const catResponse = await fetch('./category.csv');
                         if (!catResponse.ok) throw new Error("Failed to load category.csv");
                         let catText = await catResponse.text();
-                        
                         let catLines = catText.split(/\r?\n/);
                         const catHeaderIdx = catLines.findIndex(l => l.includes('CategoryID'));
                         if (catHeaderIdx > 0) catText = catLines.slice(catHeaderIdx).join('\n');
-                        
-                        const catData = Papa.parse(catText, { 
-                            header: true, skipEmptyLines: true, transformHeader: cleanHeader
-                        }).data;
-
+                        const catData = Papa.parse(catText, { header: true, skipEmptyLines: true, transformHeader: cleanHeader }).data;
                         const parsedCategories = catData.map(c => ({
                             id: parseInt(c.CategoryID),
                             parentId: c.ParentCategoryID === 'NULL' || !c.ParentCategoryID ? null : parseInt(c.ParentCategoryID),
                             name: c.CategoryName
                         })).filter(c => !isNaN(c.id) && c.name);
 
-                        // 2. Fetch Product Category Mappings
                         const mapResponse = await fetch('./productcategories.csv');
                         if (!mapResponse.ok) throw new Error("Failed to load productcategories.csv");
                         let mapText = await mapResponse.text();
-
                         const mapData = Papa.parse(mapText, { header: false, skipEmptyLines: true }).data;
                         const mappings = {};
                         mapData.forEach(row => {
@@ -197,27 +174,19 @@
                             }
                         });
 
-                        // 3. Fetch Products
                         const prodResponse = await fetch('./products.csv');
                         if (!prodResponse.ok) throw new Error("Failed to load products.csv");
                         let prodText = await prodResponse.text();
-
                         let prodLines = prodText.split(/\r?\n/);
                         const prodHeaderIdx = prodLines.findIndex(l => l.includes('ProductID'));
                         if (prodHeaderIdx > 0) prodText = prodLines.slice(prodHeaderIdx).join('\n');
-                        
-                        const prodData = Papa.parse(prodText, { 
-                            header: true, skipEmptyLines: true, transformHeader: cleanHeader
-                        }).data;
-
+                        const prodData = Papa.parse(prodText, { header: true, skipEmptyLines: true, transformHeader: cleanHeader }).data;
                         const parsedProducts = prodData.map(p => {
                             const id = parseInt(p.ProductID);
                             if (isNaN(id)) return null;
 
                             let catIds = mappings[id] || [];
-                            if (catIds.length === 0 && p.CategoryID && p.CategoryID !== 'NULL') {
-                                catIds = [parseInt(p.CategoryID)];
-                            }
+                            if (catIds.length === 0 && p.CategoryID && p.CategoryID !== 'NULL') catIds = [parseInt(p.CategoryID)];
                             
                             let imgPath = p.MainImagePath ? p.MainImagePath.trim() : '';
                             if (imgPath.startsWith('/')) imgPath = '.' + imgPath;
@@ -236,6 +205,7 @@
                                 mrp: mrpVal > priceVal ? mrpVal : null,
                                 image: imgPath,
                                 isActive: isActive,
+                                weight: parseFloat(p.WeightInGrams) || 1000,
                                 description: p.Description ? p.Description.trim() : '',
                                 shortDescription: p.ShortDescription ? p.ShortDescription.trim() : '',
                                 howToUse: p.HowToUse ? p.HowToUse.trim() : '',
@@ -318,10 +288,31 @@
             const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
             const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
+            // --- RANGE BASED SHIPPING CALCULATION ---
+            // Calculates total weight, determines KG bracket, and sets a Rs. 50 roundup range
+            const totalWeightGrams = cart.reduce((sum, item) => sum + ((item.weight || 1000) * item.qty), 0);
+            const totalWeightKg = Math.max(1, Math.ceil(totalWeightGrams / 1000));
+            
+            let minShipping = 0;
+            let maxShipping = 0;
+            
+            if (cartCount > 0) {
+                // Tiered logic: 1kg = 50 to 100, 2kg = 100 to 150, 3kg = 150 to 200...
+                minShipping = totalWeightKg * 50;
+                maxShipping = minShipping + 50;
+            }
+
+            const minFinalAmount = cartTotal + minShipping;
+            const maxFinalAmount = cartTotal + maxShipping;
+            
+            // UI Formatting for ranges
+            const shippingDisplay = cartCount > 0 ? `₹${minShipping} - ₹${maxShipping}` : "Free";
+            const totalDisplay = cartCount > 0 ? `₹${minFinalAmount} - ₹${maxFinalAmount}` : "₹0";
+            const weightDisplay = totalWeightGrams < 1000 ? `${totalWeightGrams}g` : `${(totalWeightGrams / 1000).toFixed(2)} kg`;
+
             const handleCheckoutSubmit = async (e) => {
                 e.preventDefault();
                 
-                // Safety Check: Prevent submitting if placeholder URL is still in use
                 if (ORDER_WEBHOOK_URL.includes('YOUR_WEBHOOK_ID')) {
                     alert("Developer Error: Please replace 'YOUR_WEBHOOK_ID' in the code with your actual Make.com Webhook URL.");
                     return;
@@ -329,10 +320,8 @@
 
                 setIsSubmitting(true);
 
-                // Generate a random 6-digit Order ID to mimic your ASP.NET database ID
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
-                // Exact formatting mimicking your Checkout.aspx.cs code
                 let telegramMsg = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
                 telegramMsg += `*Order ID:* #${orderId}\n`;
                 telegramMsg += `*Customer:* ${checkoutData.name}\n`;
@@ -346,23 +335,20 @@
                 });
 
                 telegramMsg += `\n*Subtotal:* ₹${cartTotal.toFixed(0)}\n`;
-                telegramMsg += `*Est. Shipping:* Pending confirmation\n`;
-                telegramMsg += `*Est. Final Total:* ₹${cartTotal.toFixed(0)}\n\n`;
+                telegramMsg += `*Est. Shipping:* ${shippingDisplay} (${weightDisplay})\n`;
+                telegramMsg += `*Est. Final Total:* ${totalDisplay}\n\n`;
                 telegramMsg += `📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
 
                 try {
-                    // Send data to the secure webhook
                     const response = await fetch(ORDER_WEBHOOK_URL, {
                         method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json' 
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            telegramMessage: telegramMsg, // Sending exactly formatted string
+                            telegramMessage: telegramMsg,
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
                             orderId: orderId,
-                            orderTotal: cartTotal
+                            orderTotal: totalDisplay
                         })
                     });
 
@@ -373,12 +359,10 @@
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        // Make.com rejected the request (e.g. invalid setup or scenario turned off)
                         alert(`Webhook Error (${response.status}): Make.com rejected the request. Please check your Make.com history.`);
                     }
                 } catch (error) {
                     console.error("Checkout Fetch Error:", error);
-                    // Network errors usually indicate CORS blocking because Make.com was inactive/invalid URL
                     alert("Network Error: Could not reach Make.com.\n\n1. Ensure your Make.com scenario is turned ON ('Run once' or active).\n2. If you are using an AdBlocker or Brave Browser, it may block webhook URLs. Try pausing shields.");
                 } finally {
                     setIsSubmitting(false);
@@ -738,9 +722,17 @@
 
                                 {cart.length > 0 && (
                                     <div className="p-5 border-t border-border-soft bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
-                                        <div className="flex justify-between items-center mb-4 text-lg">
-                                            <span className="font-semibold text-gray-600">Estimated Total:</span>
-                                            <span className="font-bold text-primary text-xl">₹{cartTotal.toFixed(2)}</span>
+                                        <div className="flex justify-between items-center mb-2 text-sm text-gray-600">
+                                            <span>Subtotal:</span>
+                                            <span className="font-semibold">₹{cartTotal.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center mb-4 text-sm text-gray-600">
+                                            <span>Est. Shipping ({weightDisplay}):</span>
+                                            <span className="font-semibold">{shippingDisplay}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center mb-4 text-lg border-t border-border-soft pt-3">
+                                            <span className="font-semibold text-gray-800">Estimated Total:</span>
+                                            <span className="font-bold text-primary text-xl">{totalDisplay}</span>
                                         </div>
                                         <p className="text-xs text-gray-400 italic mb-4 text-right">* Final shipping confirmed prior to dispatch.</p>
                                         <button 
@@ -815,9 +807,17 @@
                                         </div>
                                         
                                         <div className="bg-[#f8faf9] p-4 rounded-xl mt-6 border border-border-soft shadow-sm">
+                                            <div className="flex justify-between items-center text-sm text-gray-600 mb-1">
+                                                <span>Subtotal:</span>
+                                                <span className="font-semibold">₹{cartTotal.toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm text-gray-600 mb-3 border-b border-border-soft pb-3">
+                                                <span>Est. Shipping ({weightDisplay}):</span>
+                                                <span className="font-semibold">{shippingDisplay}</span>
+                                            </div>
                                             <div className="flex justify-between items-center text-lg font-bold text-gray-800">
                                                 <span>Total to Pay:</span>
-                                                <span className="text-primary text-xl">₹{cartTotal.toFixed(2)}</span>
+                                                <span className="text-primary text-xl">{totalDisplay}</span>
                                             </div>
                                             <div className="flex items-start gap-2 mt-3 text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
                                                 <i className="fas fa-info-circle text-primary flex-shrink-0 mt-1"></i>
