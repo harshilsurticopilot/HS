@@ -38,7 +38,7 @@
     <!-- Google Fonts: Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- FontAwesome Icons (Replaces Lucide to fix React DOM manipulation crashes) -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
     <style>
@@ -96,24 +96,33 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [toastConfig, setToastConfig] = useState({ visible: false, message: '' });
 
-            // Fetch and parse the CSV files automatically from root directory
+            // Robust CSV Fetching and Parsing Logic
             useEffect(() => {
                 const loadStoreData = async () => {
                     try {
+                        // Helper to clean headers (removes BOM and weird spacing)
+                        const cleanHeader = h => h.trim().replace(/^[\uFEFF\xA0]+|[\uFEFF\xA0]+$/g, '');
+
                         // 1. Fetch Categories
                         const catResponse = await fetch('./category.csv');
                         if (!catResponse.ok) throw new Error("Failed to load category.csv");
                         let catText = await catResponse.text();
                         
-                        const catHeaderIdx = catText.split('\n').findIndex(l => l.includes('CategoryID'));
-                        if (catHeaderIdx > 0) catText = catText.split('\n').slice(catHeaderIdx).join('\n');
-                        const catData = Papa.parse(catText, { header: true, skipEmptyLines: true }).data;
+                        let catLines = catText.split(/\r?\n/);
+                        const catHeaderIdx = catLines.findIndex(l => l.includes('CategoryID'));
+                        if (catHeaderIdx > 0) catText = catLines.slice(catHeaderIdx).join('\n');
+                        
+                        const catData = Papa.parse(catText, { 
+                            header: true, 
+                            skipEmptyLines: true,
+                            transformHeader: cleanHeader
+                        }).data;
 
                         const parsedCategories = catData.map(c => ({
                             id: parseInt(c.CategoryID),
                             parentId: c.ParentCategoryID === 'NULL' || !c.ParentCategoryID ? null : parseInt(c.ParentCategoryID),
                             name: c.CategoryName
-                        })).filter(c => !isNaN(c.id));
+                        })).filter(c => !isNaN(c.id) && c.name);
 
                         // 2. Fetch Product Category Mappings
                         const mapResponse = await fetch('./productcategories.csv');
@@ -123,12 +132,13 @@
                         const mapData = Papa.parse(mapText, { header: false, skipEmptyLines: true }).data;
                         const mappings = {};
                         mapData.forEach(row => {
-                            if (row[0] === 'ProductID') return; // skip header if present
-                            const pId = parseInt(row[0]);
-                            const cId = parseInt(row[1]);
-                            if (!isNaN(pId) && !isNaN(cId)) {
-                                if (!mappings[pId]) mappings[pId] = [];
-                                mappings[pId].push(cId);
+                            if (row.length >= 2 && row[0] !== 'ProductID') {
+                                const pId = parseInt(row[0].trim());
+                                const cId = parseInt(row[1].trim());
+                                if (!isNaN(pId) && !isNaN(cId)) {
+                                    if (!mappings[pId]) mappings[pId] = [];
+                                    mappings[pId].push(cId);
+                                }
                             }
                         });
 
@@ -137,31 +147,43 @@
                         if (!prodResponse.ok) throw new Error("Failed to load products.csv");
                         let prodText = await prodResponse.text();
 
-                        const prodHeaderIdx = prodText.split('\n').findIndex(l => l.includes('ProductID'));
-                        if (prodHeaderIdx > 0) prodText = prodText.split('\n').slice(prodHeaderIdx).join('\n');
-                        const prodData = Papa.parse(prodText, { header: true, skipEmptyLines: true }).data;
+                        let prodLines = prodText.split(/\r?\n/);
+                        const prodHeaderIdx = prodLines.findIndex(l => l.includes('ProductID'));
+                        if (prodHeaderIdx > 0) prodText = prodLines.slice(prodHeaderIdx).join('\n');
+                        
+                        const prodData = Papa.parse(prodText, { 
+                            header: true, 
+                            skipEmptyLines: true,
+                            transformHeader: cleanHeader
+                        }).data;
 
                         const parsedProducts = prodData.map(p => {
                             const id = parseInt(p.ProductID);
+                            if (isNaN(id)) return null;
+
                             let catIds = mappings[id] || [];
                             // Fallback if mapping missing but category set in main file
                             if (catIds.length === 0 && p.CategoryID && p.CategoryID !== 'NULL') {
                                 catIds = [parseInt(p.CategoryID)];
                             }
                             
-                            // Adjust image path for GitHub pages (relative path)
-                            let imgPath = p.MainImagePath || '';
+                            // Image path parsing
+                            let imgPath = p.MainImagePath ? p.MainImagePath.trim() : '';
                             if (imgPath.startsWith('/')) imgPath = '.' + imgPath;
+
+                            // Ensure isActive handles SQL bits properly (1, True, true, or missing)
+                            const isActiveStr = p.IsActive ? String(p.IsActive).trim().toLowerCase() : '1';
+                            const isActive = isActiveStr === '1' || isActiveStr === 'true';
 
                             return {
                                 id: id,
                                 categoryIds: catIds,
                                 name: p.ProductName,
-                                price: parseFloat(p.Price) || 0,
+                                price: parseFloat(p.Price) || parseFloat(p.MRP) || 0,
                                 image: imgPath,
-                                isActive: p.IsActive === undefined || p.IsActive === '1' || String(p.IsActive).toLowerCase() === 'true'
+                                isActive: isActive
                             };
-                        }).filter(p => !isNaN(p.id) && p.name && p.isActive);
+                        }).filter(p => p !== null && p.name && p.isActive);
 
                         setCategories(parsedCategories);
                         setProducts(parsedProducts);
@@ -297,7 +319,7 @@
                 return (
                     <div className="flex h-screen items-center justify-center bg-bg-light text-primary flex-col gap-4">
                         <i className="fas fa-spinner fa-spin text-4xl"></i>
-                        <p className="font-semibold text-lg">Loading Store Catalog...</p>
+                        <p className="font-semibold text-lg">Loading Catalog...</p>
                     </div>
                 );
             }
@@ -328,7 +350,7 @@
                     {/* SIDEBAR CATEGORIES */}
                     <aside className="w-64 bg-white border-r border-border-soft flex-col hidden md:flex h-full shadow-[0_10px_40px_rgba(0,0,0,0.03)] z-20 relative">
                         <div className="p-6 bg-primary text-white font-bold text-xl tracking-wide shadow-sm">
-                            <span className="flex items-center gap-2"><i className="fas fa-store"></i> List</span>
+                            <span className="flex items-center gap-2"><i className="fas fa-list"></i> List</span>
                         </div>
                         <div className="overflow-y-auto flex-1 p-4">
                             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Categories</h3>
@@ -373,7 +395,7 @@
                         
                         {/* MOBILE HEADER */}
                         <header className="md:hidden flex justify-between items-center bg-primary p-4 text-white shadow-md z-10">
-                            <h1 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-store"></i> List</h1>
+                            <h1 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-list"></i> List</h1>
                             <button onClick={() => setIsCartOpen(true)} className="relative p-2">
                                 <i className="fas fa-shopping-cart text-xl"></i>
                                 {cartCount > 0 && (
