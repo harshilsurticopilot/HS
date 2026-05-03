@@ -328,10 +328,24 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
+                // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
+                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (#${orderId}).\n\n*Order Details:*\n`;
+                cart.forEach((item, index) => {
+                    waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
+                });
+                waText += `\n*Subtotal:* ₹${cartTotal.toFixed(0)}\n`;
+                waText += `*Est. Shipping:* ${shippingDisplay}\n`;
+                waText += `*Est. Final Total:* ${totalDisplay}\n\n`;
+                waText += `Please reply to this message to confirm your order and proceed with shipping.`;
+                
+                // Encode the text so it can safely be passed into the WhatsApp URL
+                const encodedWaText = encodeURIComponent(waText);
+                const waLink = `https://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}?text=${encodedWaText}`;
+
                 // --- SWITCHED TO HTML FORMATTING WITH SECURE SANITIZATION ---
                 // Using escapeHtml() ensures special characters like '&' don't crash Telegram
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
                 telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
@@ -343,9 +357,11 @@
                 });
 
                 telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
-                telegramMsg += `<b>Est. Shipping:</b> ${shippingDisplay}\n`;
-                telegramMsg += `<b>Est. Final Total:</b> ${totalDisplay}\n\n`;
-                telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
+                telegramMsg += `<b>Est. Shipping:</b> ${escapeHtml(shippingDisplay)}\n`;
+                telegramMsg += `<b>Est. Final Total:</b> ${escapeHtml(totalDisplay)}\n\n`;
+                
+                // Add the Clickable pre-filled WhatsApp link to the Telegram payload
+                telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\n<a href="${waLink}">Click here to message customer</a>\n\nRaw Link:\n${waLink}`;
 
                 try {
                     const response = await fetch(ORDER_WEBHOOK_URL, {
