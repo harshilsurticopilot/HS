@@ -81,6 +81,41 @@
             );
         };
 
+        // --- NEW: Smart Text Formatter for DB/CSV Descriptions ---
+        const FormattedText = ({ text }) => {
+            if (!text) return null;
+            
+            // Clean up text: convert double-space bullets to newlines, and multi-spaces to paragraphs
+            let cleanText = text.replace(/\s{2,}•/g, '\n•').replace(/\s{4,}/g, '\n\n');
+            const paragraphs = cleanText.split(/\n+/).map(p => p.trim()).filter(p => p);
+
+            return (
+                <div className="bg-[#fcfdfc] p-5 md:p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                    {paragraphs.map((para, idx) => {
+                        // Render Bullet Points Properly
+                        if (para.startsWith('•') || para.startsWith('-')) {
+                            return (
+                                <div key={idx} className="flex items-start gap-3 ml-2 md:ml-4 mt-1">
+                                    <i className="fas fa-circle text-primary mt-2 opacity-60" style={{ fontSize: '6px' }}></i>
+                                    <span className="text-gray-700 flex-1 leading-relaxed">{para.substring(1).trim()}</span>
+                                </div>
+                            );
+                        } 
+                        // Render Sub-headings (e.g. "🌾 Key Benefits:")
+                        else if (para.length < 80 && (para.endsWith(':') || para.includes(': '))) {
+                            return (
+                                <strong key={idx} className="text-gray-800 block mt-3 text-[1.05rem] tracking-tight">{para}</strong>
+                            );
+                        } 
+                        // Render Standard Paragraphs
+                        else {
+                            return <p key={idx} className="text-gray-700 leading-relaxed">{para}</p>;
+                        }
+                    })}
+                </div>
+            );
+        };
+
         const App = () => {
             const [categories, setCategories] = useState([]);
             const [products, setProducts] = useState([]);
@@ -89,7 +124,7 @@
 
             const [selectedCategory, setSelectedCategory] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
-            const [selectedProduct, setSelectedProduct] = useState(null); // New state for Product Details view
+            const [selectedProduct, setSelectedProduct] = useState(null); 
             const [cart, setCart] = useState([]);
             const [isCartOpen, setIsCartOpen] = useState(false);
             const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -579,24 +614,24 @@
                                                 )}
                                             </div>
                                             
-                                            {/* Details Accordion style */}
+                                            {/* Details Accordion style with NEW FormattedText component */}
                                             <div className="border-t border-border-soft pt-8 space-y-8">
                                                 {selectedProduct.description && (
                                                     <div>
                                                         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-3"><i className="fas fa-info-circle text-primary text-xl"></i> Product Description</h3>
-                                                        <p className="text-gray-600 text-base leading-relaxed whitespace-pre-wrap bg-[#fcfdfc] p-5 rounded-xl border border-gray-100">{selectedProduct.description}</p>
+                                                        <FormattedText text={selectedProduct.description} />
                                                     </div>
                                                 )}
                                                 {selectedProduct.howToUse && (
                                                     <div>
                                                         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-3"><i className="fas fa-leaf text-primary text-xl"></i> How to Use</h3>
-                                                        <p className="text-gray-600 text-base leading-relaxed whitespace-pre-wrap bg-[#fcfdfc] p-5 rounded-xl border border-gray-100">{selectedProduct.howToUse}</p>
+                                                        <FormattedText text={selectedProduct.howToUse} />
                                                     </div>
                                                 )}
                                                 {selectedProduct.dosage && (
                                                     <div>
                                                         <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-3"><i className="fas fa-balance-scale text-primary text-xl"></i> Dosage Instructions</h3>
-                                                        <p className="text-gray-600 text-base leading-relaxed whitespace-pre-wrap bg-[#fcfdfc] p-5 rounded-xl border border-gray-100">{selectedProduct.dosage}</p>
+                                                        <FormattedText text={selectedProduct.dosage} />
                                                     </div>
                                                 )}
                                             </div>
