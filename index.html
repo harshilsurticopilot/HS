@@ -329,35 +329,45 @@
 
                 setIsSubmitting(true);
 
-                let message = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
-                message += `👤 *Customer:* ${checkoutData.name}\n`;
-                message += `📞 *Phone:* ${checkoutData.phone}\n`;
-                if(checkoutData.email) message += `📧 *Email:* ${checkoutData.email}\n`;
-                message += `📍 *Address:* ${checkoutData.address}\n\n`;
-                message += `📦 *Items Ordered:*\n`;
+                // Generate a random 6-digit Order ID to mimic your ASP.NET database ID
+                const orderId = Math.floor(100000 + Math.random() * 900000);
+
+                // Exact formatting mimicking your Checkout.aspx.cs code
+                let telegramMsg = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
+                telegramMsg += `*Order ID:* #${orderId}\n`;
+                telegramMsg += `*Customer:* ${checkoutData.name}\n`;
+                telegramMsg += `*Phone:* ${checkoutData.phone}\n`;
+                if(checkoutData.email) telegramMsg += `*Email:* ${checkoutData.email}\n`;
+                telegramMsg += `*Address:* ${checkoutData.address}\n\n`;
+                telegramMsg += `*Items Ordered:*\n`;
                 
                 cart.forEach((item, index) => {
-                    message += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price} = ₹${item.qty * item.price}\n`;
+                    telegramMsg += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
                 });
 
-                message += `\n💰 *Subtotal:* ₹${cartTotal}\n`;
-                message += `\n📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
+                telegramMsg += `\n*Subtotal:* ₹${cartTotal.toFixed(0)}\n`;
+                telegramMsg += `*Est. Shipping:* Pending confirmation\n`;
+                telegramMsg += `*Est. Final Total:* ₹${cartTotal.toFixed(0)}\n\n`;
+                telegramMsg += `📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
 
                 try {
                     // Send data to the secure webhook
                     const response = await fetch(ORDER_WEBHOOK_URL, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 
+                            'Content-Type': 'application/json' 
+                        },
                         body: JSON.stringify({
-                            message: message,
+                            telegramMessage: telegramMsg, // Sending exactly formatted string
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
+                            orderId: orderId,
                             orderTotal: cartTotal
                         })
                     });
 
                     if (response.ok) {
-                        alert("Order placed successfully! We will contact you soon to confirm the order.");
+                        alert(`Order #${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
                         setCart([]);
                         setIsCheckoutOpen(false);
                         setIsCartOpen(false);
@@ -369,7 +379,7 @@
                 } catch (error) {
                     console.error("Checkout Fetch Error:", error);
                     // Network errors usually indicate CORS blocking because Make.com was inactive/invalid URL
-                    alert("Network Error: Could not reach Make.com.\n\nPlease ensure your Make.com scenario is turned ON ('Run once' or active).");
+                    alert("Network Error: Could not reach Make.com.\n\n1. Ensure your Make.com scenario is turned ON ('Run once' or active).\n2. If you are using an AdBlocker or Brave Browser, it may block webhook URLs. Try pausing shields.");
                 } finally {
                     setIsSubmitting(false);
                 }
