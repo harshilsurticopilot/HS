@@ -160,6 +160,14 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [toastConfig, setToastConfig] = useState({ visible: false, message: '' });
 
+            // New states for tracking the collapsible menus
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const [expandedParents, setExpandedParents] = useState({});
+
+            const toggleParent = (id) => {
+                setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
+            };
+
             useEffect(() => {
                 const loadStoreData = async () => {
                     try {
@@ -465,31 +473,46 @@
                                 All Products
                             </button>
 
-                            {categories.filter(c => c.parentId === null).map(parentCat => (
-                                <div key={parentCat.id} className="mb-1">
-                                    <button 
-                                        onClick={() => { setSelectedCategory(parentCat.id); setSearchQuery(''); resetViews(); }}
-                                        className={`w-full text-left px-4 py-2.5 rounded-lg transition-all duration-200 ${selectedCategory === parentCat.id && !selectedProduct ? 'bg-[#ebf2ef] text-primary font-semibold border-l-4 border-primary' : 'hover:bg-gray-50 text-gray-600 border-l-4 border-transparent'}`}
-                                    >
-                                        {parentCat.name}
-                                    </button>
-                                    
-                                    {/* Render Nested Subcategories if they exist */}
-                                    {categories.filter(c => c.parentId === parentCat.id).length > 0 && (
-                                        <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-2 space-y-1">
-                                            {categories.filter(c => c.parentId === parentCat.id).map(childCat => (
+                            {categories.filter(c => c.parentId === null).map(parentCat => {
+                                const children = categories.filter(c => c.parentId === parentCat.id);
+                                const hasChildren = children.length > 0;
+                                const isExpanded = expandedParents[parentCat.id];
+
+                                return (
+                                    <div key={parentCat.id} className="mb-1">
+                                        <div className={`flex items-center rounded-lg transition-all duration-200 ${selectedCategory === parentCat.id && !selectedProduct ? 'bg-[#ebf2ef] border-l-4 border-primary' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
+                                            <button 
+                                                onClick={() => { setSelectedCategory(parentCat.id); setSearchQuery(''); resetViews(); setIsMobileMenuOpen(false); }}
+                                                className={`flex-1 text-left px-4 py-2.5 ${selectedCategory === parentCat.id && !selectedProduct ? 'text-primary font-semibold' : 'text-gray-600'}`}
+                                            >
+                                                {parentCat.name}
+                                            </button>
+                                            {hasChildren && (
                                                 <button 
-                                                    key={childCat.id}
-                                                    onClick={() => { setSelectedCategory(childCat.id); setSearchQuery(''); resetViews(); }}
-                                                    className={`w-full text-left px-4 py-1.5 text-sm rounded-lg transition-all duration-200 ${selectedCategory === childCat.id && !selectedProduct ? 'bg-[#ebf2ef] text-primary font-semibold' : 'hover:bg-gray-50 text-gray-500'}`}
+                                                    onClick={(e) => { e.stopPropagation(); toggleParent(parentCat.id); }}
+                                                    className="p-3 text-gray-400 hover:text-primary w-10 flex justify-center items-center"
                                                 >
-                                                    {childCat.name}
+                                                    <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-xs`}></i>
                                                 </button>
-                                            ))}
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            ))}
+                                        
+                                        {hasChildren && isExpanded && (
+                                            <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-2 space-y-1">
+                                                {children.map(childCat => (
+                                                    <button 
+                                                        key={childCat.id}
+                                                        onClick={() => { setSelectedCategory(childCat.id); setSearchQuery(''); resetViews(); setIsMobileMenuOpen(false); }}
+                                                        className={`w-full text-left px-4 py-1.5 text-sm rounded-lg transition-all duration-200 ${selectedCategory === childCat.id && !selectedProduct ? 'bg-[#ebf2ef] text-primary font-semibold' : 'hover:bg-gray-50 text-gray-500'}`}
+                                                    >
+                                                        {childCat.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </aside>
 
@@ -511,25 +534,76 @@
                                 </button>
                             </header>
 
-                            {/* Mobile Category List - FIXED: Now wraps instead of scrolling horizontally */}
-                            <div className="bg-white border-b border-border-soft w-full p-3 shadow-sm">
-                                <div className="flex flex-wrap gap-2 items-center">
-                                    <button 
-                                        onClick={() => { setSelectedCategory(null); setSearchQuery(''); resetViews(); }}
-                                        className={`px-4 py-1.5 text-[13px] sm:text-sm rounded-full transition-colors ${selectedCategory === null && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
-                                    >
-                                        All Products
-                                    </button>
-                                    {flatCategories.map(cat => (
-                                        <button 
-                                            key={cat.id}
-                                            onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); resetViews(); }}
-                                            className={`px-4 py-1.5 text-[13px] sm:text-sm rounded-full transition-colors ${selectedCategory === cat.id && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
-                                        >
-                                            {cat.displayName}
-                                        </button>
-                                    ))}
-                                </div>
+                            {/* Mobile Category Dropdown (Collapsible & Grouped) */}
+                            <div className="bg-white border-b border-border-soft w-full shadow-sm relative">
+                                <button 
+                                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                    className="w-full px-4 py-3 flex justify-between items-center text-sm font-semibold text-gray-700 bg-white"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <i className="fas fa-filter text-primary"></i>
+                                        <span className="truncate">
+                                            {selectedCategory === null 
+                                                ? 'All Products' 
+                                                : categories.find(c => c.id === selectedCategory)?.name || 'Categories'}
+                                        </span>
+                                    </div>
+                                    <i className={`fas fa-chevron-${isMobileMenuOpen ? 'up' : 'down'} text-gray-400 transition-transform ml-2`}></i>
+                                </button>
+                                
+                                {isMobileMenuOpen && (
+                                    <div className="absolute top-full left-0 w-full bg-white border-b border-border-soft shadow-xl max-h-[60vh] overflow-y-auto z-40">
+                                        <div className="p-3">
+                                            <button 
+                                                onClick={() => { setSelectedCategory(null); setSearchQuery(''); resetViews(); setIsMobileMenuOpen(false); }}
+                                                className={`w-full text-left px-4 py-2.5 mb-1 rounded-lg transition-all duration-200 ${selectedCategory === null && !selectedProduct ? 'bg-[#ebf2ef] text-primary font-semibold border-l-4 border-primary' : 'hover:bg-gray-50 text-gray-600 border-l-4 border-transparent'}`}
+                                            >
+                                                All Products
+                                            </button>
+
+                                            {categories.filter(c => c.parentId === null).map(parentCat => {
+                                                const children = categories.filter(c => c.parentId === parentCat.id);
+                                                const hasChildren = children.length > 0;
+                                                const isExpanded = expandedParents[parentCat.id];
+
+                                                return (
+                                                    <div key={parentCat.id} className="mb-1">
+                                                        <div className={`flex items-center rounded-lg transition-all duration-200 ${selectedCategory === parentCat.id && !selectedProduct ? 'bg-[#ebf2ef] border-l-4 border-primary' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
+                                                            <button 
+                                                                onClick={() => { setSelectedCategory(parentCat.id); setSearchQuery(''); resetViews(); setIsMobileMenuOpen(false); }}
+                                                                className={`flex-1 text-left px-4 py-2.5 ${selectedCategory === parentCat.id && !selectedProduct ? 'text-primary font-semibold' : 'text-gray-600'}`}
+                                                            >
+                                                                {parentCat.name}
+                                                            </button>
+                                                            {hasChildren && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); toggleParent(parentCat.id); }}
+                                                                    className="p-3 text-gray-400 hover:text-primary w-10 flex justify-center items-center"
+                                                                >
+                                                                    <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-xs`}></i>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {hasChildren && isExpanded && (
+                                                            <div className="ml-4 mt-1 border-l-2 border-gray-100 pl-2 space-y-1">
+                                                                {children.map(childCat => (
+                                                                    <button 
+                                                                        key={childCat.id}
+                                                                        onClick={() => { setSelectedCategory(childCat.id); setSearchQuery(''); resetViews(); setIsMobileMenuOpen(false); }}
+                                                                        className={`w-full text-left px-4 py-1.5 text-sm rounded-lg transition-all duration-200 ${selectedCategory === childCat.id && !selectedProduct ? 'bg-[#ebf2ef] text-primary font-semibold' : 'hover:bg-gray-50 text-gray-500'}`}
+                                                                    >
+                                                                        {childCat.name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
