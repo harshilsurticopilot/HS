@@ -81,6 +81,16 @@
             );
         };
 
+        // Escapes special characters to prevent Telegram API crashes when using HTML Parse Mode
+        const escapeHtml = (unsafe) => {
+            return (unsafe || '').toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        };
+
         // --- PERFECTED: Smart Text Formatter for Clean Product Descriptions ---
         const FormattedText = ({ text }) => {
             if (!text) return null;
@@ -318,17 +328,18 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
-                // --- SWITCHED TO HTML FORMATTING FOR TELEGRAM VIA MAKE.COM ---
+                // --- SWITCHED TO HTML FORMATTING WITH SECURE SANITIZATION ---
+                // Using escapeHtml() ensures special characters like '&' don't crash Telegram
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
                 telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
-                telegramMsg += `<b>Customer:</b> ${checkoutData.name}\n`;
-                telegramMsg += `<b>Phone:</b> ${checkoutData.phone}\n`;
-                if(checkoutData.email) telegramMsg += `<b>Email:</b> ${checkoutData.email}\n`;
-                telegramMsg += `<b>Address:</b> ${checkoutData.address}\n\n`;
+                telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
+                telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
+                if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
+                telegramMsg += `<b>Address:</b> ${escapeHtml(checkoutData.address)}\n\n`;
                 telegramMsg += `<b>Items Ordered:</b>\n`;
                 
                 cart.forEach((item, index) => {
-                    telegramMsg += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
+                    telegramMsg += `${index + 1}. ${escapeHtml(item.name)} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
                 });
 
                 telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
@@ -341,10 +352,10 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            // Pass the message in multiple variable names to prevent Make.com setup errors
+                            // Pass the message safely
+                            telegramMessage: telegramMsg,
                             text: telegramMsg,
                             message: telegramMsg,
-                            telegramMessage: telegramMsg,
                             
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
