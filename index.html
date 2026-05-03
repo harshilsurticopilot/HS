@@ -305,6 +305,11 @@
                 });
             };
 
+            const removeFromCart = (id) => {
+                setCart(prev => prev.filter(item => item.id !== id));
+                showToast("Item removed");
+            };
+
             const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
             const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
@@ -506,23 +511,25 @@
                                 </button>
                             </header>
 
-                            {/* Mobile Category Scroll */}
-                            <div className="bg-white border-b border-border-soft overflow-x-auto hide-scrollbar p-3 flex gap-2 items-center w-full">
-                                <button 
-                                    onClick={() => { setSelectedCategory(null); setSearchQuery(''); resetViews(); }}
-                                    className={`flex-shrink-0 px-5 py-2 text-sm rounded-full transition-colors ${selectedCategory === null && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
-                                >
-                                    All Products
-                                </button>
-                                {flatCategories.map(cat => (
+                            {/* Mobile Category Scroll - FIXED TO ALLOW TOUCH PAN SWIPING */}
+                            <div className="bg-white border-b border-border-soft w-full overflow-x-auto hide-scrollbar touch-pan-x">
+                                <div className="flex px-3 py-3 gap-2 w-max items-center">
                                     <button 
-                                        key={cat.id}
-                                        onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); resetViews(); }}
-                                        className={`flex-shrink-0 px-5 py-2 text-sm rounded-full transition-colors ${selectedCategory === cat.id && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
+                                        onClick={() => { setSelectedCategory(null); setSearchQuery(''); resetViews(); }}
+                                        className={`flex-shrink-0 px-5 py-2 text-sm rounded-full transition-colors ${selectedCategory === null && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
                                     >
-                                        {cat.displayName}
+                                        All Products
                                     </button>
-                                ))}
+                                    {flatCategories.map(cat => (
+                                        <button 
+                                            key={cat.id}
+                                            onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); resetViews(); }}
+                                            className={`flex-shrink-0 px-5 py-2 text-sm rounded-full transition-colors ${selectedCategory === cat.id && !selectedProduct ? 'bg-primary text-white font-medium' : 'bg-white text-gray-600 border border-border-soft hover:bg-gray-50'}`}
+                                        >
+                                            {cat.displayName}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
@@ -742,12 +749,21 @@
                                         </div>
                                     ) : (
                                         cart.map(item => (
-                                            <div key={item.id} className="flex gap-2.5 md:gap-4 p-2.5 md:p-3 bg-white rounded-xl shadow-sm border border-border-soft">
+                                            <div key={item.id} className="flex gap-2.5 md:gap-4 p-2.5 md:p-3 bg-white rounded-xl shadow-sm border border-border-soft relative">
                                                 <div className="w-16 h-16 md:w-20 md:h-20 bg-bg-card-img rounded-lg border border-gray-100 p-1 flex-shrink-0 cursor-pointer" onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}>
                                                     <img src={item.image} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" onError={(e) => { e.target.src = 'https://via.placeholder.com/100?text=No+Image'; }} />
                                                 </div>
-                                                <div className="flex-1 flex flex-col justify-between py-0.5">
-                                                    <h4 className="text-[13px] md:text-sm font-semibold text-gray-800 line-clamp-2 leading-tight cursor-pointer hover:text-primary transition-colors" onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}>{item.name}</h4>
+                                                <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                                                    <div className="flex justify-between items-start gap-2">
+                                                        <h4 className="text-[13px] md:text-sm font-semibold text-gray-800 line-clamp-2 leading-tight cursor-pointer hover:text-primary transition-colors pr-1 flex-1" onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}>{item.name}</h4>
+                                                        <button 
+                                                            onClick={() => removeFromCart(item.id)} 
+                                                            className="text-gray-300 hover:text-red-500 transition-colors p-1 mt-[-4px] mr-[-4px] flex-shrink-0"
+                                                            title="Remove item"
+                                                        >
+                                                            <i className="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </div>
                                                     <div className="flex items-center justify-between mt-1 md:mt-2">
                                                         <div className="text-primary font-bold text-sm">₹{item.price.toFixed(0)}</div>
                                                         <div className="flex items-center justify-between border border-border-soft rounded-md bg-white w-[70px] md:w-20">
