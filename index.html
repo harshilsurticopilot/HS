@@ -353,7 +353,7 @@
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
                 // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
-                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (#${orderId}).\n\n*Order Details:*\n`;
+                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (${orderId}).\n\n*Order Details:*\n`;
                 cart.forEach((item, index) => {
                     waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
                 });
@@ -368,7 +368,7 @@
 
                 // --- HTML FORMATTING WITH SECURE SANITIZATION ---
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
                 telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
