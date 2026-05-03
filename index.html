@@ -77,8 +77,8 @@
         const { useState, useEffect, useMemo } = React;
 
         // --- WEBHOOK CONFIGURATION (SECURE) ---
-        // REPLACE THIS URL WITH YOUR ACTUAL MAKE.COM WEBHOOK URL
-        const ORDER_WEBHOOK_URL = 'https://hook.us2.make.com/c5b9g1rprsaqe3qn3apeb6nr0hhmycj9';
+        // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+        const ORDER_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbw_IMLteB2IhnlM4Hi7eb5XPfYV7kQqhYzqhP15JaCkQdPwM37VuU_s7x6HpMDWyaeI/exec';
 
         const Toast = ({ message, isVisible }) => {
             if (!isVisible) return null;
@@ -343,8 +343,8 @@
             const handleCheckoutSubmit = async (e) => {
                 e.preventDefault();
                 
-                if (ORDER_WEBHOOK_URL.includes('YOUR_WEBHOOK_ID')) {
-                    alert("Developer Error: Please replace 'YOUR_WEBHOOK_ID' in the code with your actual Make.com Webhook URL.");
+                if (ORDER_WEBHOOK_URL.includes('YOUR_SCRIPT_ID')) {
+                    alert("Developer Error: Please replace 'YOUR_SCRIPT_ID' in the code with your actual Google Apps Script URL.");
                     return;
                 }
 
@@ -353,7 +353,7 @@
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
                 // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
-                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (${orderId}).\n\n*Order Details:*\n`;
+                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (#${orderId}).\n\n*Order Details:*\n`;
                 cart.forEach((item, index) => {
                     waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
                 });
@@ -366,10 +366,9 @@
                 const encodedWaText = encodeURIComponent(waText);
                 const waLink = `https://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}?text=${encodedWaText}`;
 
-                // --- SWITCHED TO HTML FORMATTING WITH SECURE SANITIZATION ---
-                // Using escapeHtml() ensures special characters like '&' don't crash Telegram
+                // --- HTML FORMATTING WITH SECURE SANITIZATION ---
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
                 telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
@@ -390,9 +389,9 @@
                 try {
                     const response = await fetch(ORDER_WEBHOOK_URL, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        // CRITICAL: Changing Content-Type to text/plain bypasses Google's strict CORS block
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({
-                            // Cleanly sending only one message payload to avoid Make.com confusion
                             telegramMessage: telegramMsg,
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
@@ -401,20 +400,22 @@
                         })
                     });
 
-                    if (response.ok) {
+                    // Parse the Google Apps Script JSON response
+                    const responseData = await response.json();
+
+                    if (response.ok && responseData.status === "success") {
                         alert(`Order #${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
                         setCart([]);
                         setIsCheckoutOpen(false);
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        const errDetails = await response.text();
-                        console.error(`Webhook Error (${response.status}):\n${errDetails}`);
-                        alert(`Webhook Error (${response.status}): Make.com rejected the request. Please check your Make.com history or settings.`);
+                        console.error(`Google Apps Script Error:`, responseData.error || 'Unknown error');
+                        alert(`Webhook Error: Failed to process request. Please try again later.`);
                     }
                 } catch (error) {
                     console.error("Checkout Network Error:", error);
-                    alert("Network Error: Could not reach Make.com.\n\n1. Ensure your Make.com scenario is turned ON ('Run once' or active).\n2. If you are using an AdBlocker or Brave Browser, it may block webhook URLs. Try pausing shields.");
+                    alert("Network Error: Could not reach the server. Please check your internet connection and try again.");
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -835,22 +836,22 @@
                                                     <img src={item.image} alt={item.name} className="w-full h-full object-contain mix-blend-multiply" onError={(e) => { e.target.src = 'https://via.placeholder.com/100?text=No+Image'; }} />
                                                 </div>
                                                 <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                                                    <h4 className="text-[13px] md:text-sm font-semibold text-gray-800 line-clamp-2 leading-tight cursor-pointer hover:text-primary transition-colors" onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}>{item.name}</h4>
+                                                    <div className="flex justify-between items-start gap-2">
+                                                        <h4 className="text-[13px] md:text-sm font-semibold text-gray-800 line-clamp-2 leading-tight cursor-pointer hover:text-primary transition-colors pr-1 flex-1" onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}>{item.name}</h4>
+                                                        <button 
+                                                            onClick={() => removeFromCart(item.id)} 
+                                                            className="text-gray-300 hover:text-red-500 transition-colors p-1 mt-[-4px] mr-[-4px] flex-shrink-0"
+                                                            title="Remove item"
+                                                        >
+                                                            <i className="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </div>
                                                     <div className="flex items-center justify-between mt-1 md:mt-2">
                                                         <div className="text-primary font-bold text-sm">₹{item.price.toFixed(0)}</div>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="flex items-center justify-between border border-border-soft rounded-md bg-white w-[70px] md:w-20">
-                                                                <button onClick={() => updateQty(item.id, -1)} className="px-2 py-1 md:px-2 md:py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-minus text-[10px] md:text-xs"></i></button>
-                                                                <span className="text-[11px] md:text-xs font-semibold">{item.qty}</span>
-                                                                <button onClick={() => updateQty(item.id, 1)} className="px-2 py-1 md:px-2 md:py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-plus text-[10px] md:text-xs"></i></button>
-                                                            </div>
-                                                            <button 
-                                                                onClick={() => removeFromCart(item.id)} 
-                                                                className="w-7 h-7 flex items-center justify-center text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
-                                                                title="Remove item"
-                                                            >
-                                                                <i className="fas fa-trash-alt text-[11px] md:text-xs"></i>
-                                                            </button>
+                                                        <div className="flex items-center justify-between border border-border-soft rounded-md bg-white w-[70px] md:w-20">
+                                                            <button onClick={() => updateQty(item.id, -1)} className="px-2 py-1 md:px-2 md:py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-minus text-[10px] md:text-xs"></i></button>
+                                                            <span className="text-[11px] md:text-xs font-semibold">{item.qty}</span>
+                                                            <button onClick={() => updateQty(item.id, 1)} className="px-2 py-1 md:px-2 md:py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-plus text-[10px] md:text-xs"></i></button>
                                                         </div>
                                                     </div>
                                                 </div>
