@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Order Portal</title>
+    <title>List</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -38,8 +38,8 @@
     <!-- Google Fonts: Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- FontAwesome Icons (Replaces Lucide to fix React DOM manipulation crashes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
     <style>
         body { background-color: #f4f7f5; font-family: 'Poppins', sans-serif; }
@@ -74,7 +74,7 @@
             return (
                 <div className="fixed bottom-8 right-8 z-[9999] toast-enter">
                     <div className="bg-primary text-white px-5 py-3 rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center gap-3 font-medium">
-                        <i data-lucide="check-circle" className="w-5 h-5"></i>
+                        <i className="fas fa-check-circle text-xl"></i>
                         {message}
                     </div>
                 </div>
@@ -96,12 +96,15 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [toastConfig, setToastConfig] = useState({ visible: false, message: '' });
 
-            // Fetch and parse the CSV files automatically
+            // Fetch and parse the CSV files automatically from root directory
             useEffect(() => {
                 const loadStoreData = async () => {
                     try {
                         // 1. Fetch Categories
-                        let catText = await (await fetch('./category.csv')).text();
+                        const catResponse = await fetch('./category.csv');
+                        if (!catResponse.ok) throw new Error("Failed to load category.csv");
+                        let catText = await catResponse.text();
+                        
                         const catHeaderIdx = catText.split('\n').findIndex(l => l.includes('CategoryID'));
                         if (catHeaderIdx > 0) catText = catText.split('\n').slice(catHeaderIdx).join('\n');
                         const catData = Papa.parse(catText, { header: true, skipEmptyLines: true }).data;
@@ -113,7 +116,10 @@
                         })).filter(c => !isNaN(c.id));
 
                         // 2. Fetch Product Category Mappings
-                        let mapText = await (await fetch('./productcategories.csv')).text();
+                        const mapResponse = await fetch('./productcategories.csv');
+                        if (!mapResponse.ok) throw new Error("Failed to load productcategories.csv");
+                        let mapText = await mapResponse.text();
+
                         const mapData = Papa.parse(mapText, { header: false, skipEmptyLines: true }).data;
                         const mappings = {};
                         mapData.forEach(row => {
@@ -127,7 +133,10 @@
                         });
 
                         // 3. Fetch Products
-                        let prodText = await (await fetch('./products.csv')).text();
+                        const prodResponse = await fetch('./products.csv');
+                        if (!prodResponse.ok) throw new Error("Failed to load products.csv");
+                        let prodText = await prodResponse.text();
+
                         const prodHeaderIdx = prodText.split('\n').findIndex(l => l.includes('ProductID'));
                         if (prodHeaderIdx > 0) prodText = prodText.split('\n').slice(prodHeaderIdx).join('\n');
                         const prodData = Papa.parse(prodText, { header: true, skipEmptyLines: true }).data;
@@ -159,18 +168,13 @@
                         setIsLoading(false);
                     } catch (err) {
                         console.error(err);
-                        setDataError("Could not load store data. Please ensure 'category.csv', 'products.csv', and 'productcategories.csv' are uploaded to the exact same folder as this file on GitHub.");
+                        setDataError(err.message || "Could not load store data.");
                         setIsLoading(false);
                     }
                 };
 
                 loadStoreData();
             }, []);
-
-            // Re-initialize lucide icons
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            });
 
             const showToast = (message) => {
                 setToastConfig({ visible: true, message });
@@ -292,7 +296,7 @@
             if (isLoading) {
                 return (
                     <div className="flex h-screen items-center justify-center bg-bg-light text-primary flex-col gap-4">
-                        <i data-lucide="loader-2" className="animate-spin w-10 h-10"></i>
+                        <i className="fas fa-spinner fa-spin text-4xl"></i>
                         <p className="font-semibold text-lg">Loading Store Catalog...</p>
                     </div>
                 );
@@ -302,13 +306,14 @@
                 return (
                     <div className="flex h-screen items-center justify-center bg-bg-light p-6">
                         <div className="bg-white p-8 rounded-2xl shadow-lg max-w-lg text-center border border-red-100">
-                            <i data-lucide="info" className="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+                            <i className="fas fa-info-circle text-5xl text-red-500 mx-auto mb-4 block"></i>
                             <h2 className="text-xl font-bold text-gray-800 mb-2">Setup Required</h2>
                             <p className="text-gray-600 mb-4">{dataError}</p>
                             <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg text-left">
-                                <strong>Checklist:</strong><br/>
+                                <strong>Important:</strong><br/>
                                 1. Ensure files are named exactly: <code>products.csv</code>, <code>category.csv</code>, <code>productcategories.csv</code><br/>
-                                2. Ensure they are in the same directory as this HTML file on GitHub.<br/>
+                                2. They must be in the same folder as this HTML file.<br/>
+                                3. <strong>Browsers block reading local files directly.</strong> This will not work if you just double-click the HTML file. It must be uploaded to GitHub Pages or run through a local web server (like VS Code Live Server).
                             </p>
                         </div>
                     </div>
@@ -323,7 +328,7 @@
                     {/* SIDEBAR CATEGORIES */}
                     <aside className="w-64 bg-white border-r border-border-soft flex-col hidden md:flex h-full shadow-[0_10px_40px_rgba(0,0,0,0.03)] z-20 relative">
                         <div className="p-6 bg-primary text-white font-bold text-xl tracking-wide shadow-sm">
-                            <span className="flex items-center gap-2"><i data-lucide="store"></i> Private Store</span>
+                            <span className="flex items-center gap-2"><i className="fas fa-store"></i> List</span>
                         </div>
                         <div className="overflow-y-auto flex-1 p-4">
                             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Categories</h3>
@@ -368,9 +373,9 @@
                         
                         {/* MOBILE HEADER */}
                         <header className="md:hidden flex justify-between items-center bg-primary p-4 text-white shadow-md z-10">
-                            <h1 className="font-bold text-lg flex items-center gap-2"><i data-lucide="store" className="w-5 h-5"></i> Private Store</h1>
+                            <h1 className="font-bold text-lg flex items-center gap-2"><i className="fas fa-store"></i> List</h1>
                             <button onClick={() => setIsCartOpen(true)} className="relative p-2">
-                                <i data-lucide="shopping-cart"></i>
+                                <i className="fas fa-shopping-cart text-xl"></i>
                                 {cartCount > 0 && (
                                     <span className="absolute top-0 right-0 bg-[#e74c3c] text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-primary">
                                         {cartCount}
@@ -419,10 +424,10 @@
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             className="w-full pl-10 pr-8 py-2.5 bg-white border border-border-soft rounded-xl focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-sm shadow-sm"
                                         />
-                                        <i data-lucide="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                                        <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                                         {searchQuery && (
                                             <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
-                                                <i data-lucide="x" className="w-4 h-4"></i>
+                                                <i className="fas fa-times"></i>
                                             </button>
                                         )}
                                     </div>
@@ -431,7 +436,7 @@
                                         onClick={() => setIsCartOpen(true)}
                                         className="hidden md:flex items-center gap-2 bg-white border border-border-soft hover:border-primary text-primary px-5 py-2.5 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md font-medium"
                                     >
-                                        <i data-lucide="shopping-cart" className="w-5 h-5"></i>
+                                        <i className="fas fa-shopping-cart"></i>
                                         Cart
                                         {cartCount > 0 && <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full ml-1">{cartCount}</span>}
                                     </button>
@@ -460,16 +465,16 @@
                                                     
                                                     {inCart ? (
                                                         <div className="flex items-center justify-between border border-primary rounded-lg overflow-hidden bg-white">
-                                                            <button onClick={() => updateQty(product.id, -1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i data-lucide="minus" className="w-4 h-4"></i></button>
+                                                            <button onClick={() => updateQty(product.id, -1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i className="fas fa-minus text-xs"></i></button>
                                                             <span className="font-semibold text-primary">{inCart.qty}</span>
-                                                            <button onClick={() => updateQty(product.id, 1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                                                            <button onClick={() => updateQty(product.id, 1)} className="px-3 py-1.5 text-primary hover:bg-[#ebf2ef] transition-colors"><i className="fas fa-plus text-xs"></i></button>
                                                         </div>
                                                     ) : (
                                                         <button 
                                                             onClick={() => addToCart(product)}
                                                             className="w-full bg-white border border-primary text-primary hover:bg-primary hover:text-white py-2 rounded-lg font-semibold transition-all duration-200 text-sm flex justify-center items-center gap-2"
                                                         >
-                                                            <i data-lucide="shopping-cart" className="w-4 h-4"></i> Add to Cart
+                                                            <i className="fas fa-shopping-cart"></i> Add to Cart
                                                         </button>
                                                     )}
                                                 </div>
@@ -479,7 +484,7 @@
                                 })}
                                 {filteredProducts.length === 0 && (
                                     <div className="col-span-full py-16 text-center text-gray-500 flex flex-col items-center">
-                                        <i data-lucide="package-open" className="w-16 h-16 text-gray-300 mb-3"></i>
+                                        <i className="fas fa-box-open text-6xl text-gray-300 mb-3 block"></i>
                                         <p className="font-medium text-lg">No products found for this selection.</p>
                                     </div>
                                 )}
@@ -499,10 +504,10 @@
                                 
                                 <div className="p-5 border-b border-border-soft flex justify-between items-center bg-white">
                                     <h2 className="text-xl font-bold flex items-center gap-2 text-primary">
-                                        <i data-lucide="shopping-cart"></i> Your Cart
+                                        <i className="fas fa-shopping-cart text-xl"></i> Your Cart
                                     </h2>
                                     <button onClick={() => setIsCartOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
-                                        <i data-lucide="x"></i>
+                                        <i className="fas fa-times text-xl"></i>
                                     </button>
                                 </div>
 
@@ -510,7 +515,7 @@
                                     {cart.length === 0 ? (
                                         <div className="text-center py-12 text-gray-500 flex flex-col items-center">
                                             <div className="bg-white p-4 rounded-full shadow-sm mb-4">
-                                                <i data-lucide="shopping-bag" className="w-10 h-10 text-gray-300"></i>
+                                                <i className="fas fa-shopping-bag text-4xl text-gray-300 block"></i>
                                             </div>
                                             <p className="font-medium">Your cart is empty.</p>
                                             <button onClick={() => setIsCartOpen(false)} className="mt-4 text-primary text-sm font-semibold hover:underline">Continue Shopping</button>
@@ -526,9 +531,9 @@
                                                     <div className="flex items-center justify-between mt-2">
                                                         <div className="text-primary font-bold text-sm">₹{item.price.toFixed(2)}</div>
                                                         <div className="flex items-center justify-between border border-border-soft rounded-md bg-white w-20">
-                                                            <button onClick={() => updateQty(item.id, -1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i data-lucide="minus" className="w-3 h-3"></i></button>
+                                                            <button onClick={() => updateQty(item.id, -1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-minus text-xs"></i></button>
                                                             <span className="text-xs font-semibold">{item.qty}</span>
-                                                            <button onClick={() => updateQty(item.id, 1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i data-lucide="plus" className="w-3 h-3"></i></button>
+                                                            <button onClick={() => updateQty(item.id, 1)} className="px-2 py-1 text-gray-500 hover:text-primary hover:bg-gray-50"><i className="fas fa-plus text-xs"></i></button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -548,7 +553,7 @@
                                             onClick={() => setIsCheckoutOpen(true)}
                                             className="w-full bg-primary hover:bg-[#20503b] text-white py-3.5 rounded-xl font-bold shadow-md transition-colors flex justify-center items-center gap-2"
                                         >
-                                            Proceed to Secure Checkout <i data-lucide="arrow-right" className="w-4 h-4"></i>
+                                            Proceed to Secure Checkout <i className="fas fa-arrow-right"></i>
                                         </button>
                                     </div>
                                 )}
@@ -564,10 +569,10 @@
                             <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
                                 <div className="p-5 border-b border-border-soft flex justify-between items-center">
                                     <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                                        <i data-lucide="lock" className="w-5 h-5"></i> Secure Checkout
+                                        <i className="fas fa-lock text-xl"></i> Secure Checkout
                                     </h2>
                                     <button onClick={() => setIsCheckoutOpen(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors">
-                                        <i data-lucide="x"></i>
+                                        <i className="fas fa-times"></i>
                                     </button>
                                 </div>
                                 
@@ -621,7 +626,7 @@
                                                 <span className="text-primary text-xl">₹{cartTotal.toFixed(2)}</span>
                                             </div>
                                             <div className="flex items-start gap-2 mt-3 text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
-                                                <i data-lucide="info" className="w-4 h-4 text-primary flex-shrink-0 mt-0.5"></i>
+                                                <i className="fas fa-info-circle text-primary flex-shrink-0 mt-1"></i>
                                                 <p>Payment and shipping instructions will be shared after order placement.</p>
                                             </div>
                                         </div>
@@ -643,9 +648,9 @@
                                         className="flex-1 py-3.5 bg-primary text-white rounded-xl font-bold shadow hover:bg-[#20503b] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
                                         {isSubmitting ? (
-                                            <span className="flex items-center gap-2"><i data-lucide="loader-2" className="animate-spin w-5 h-5"></i> Processing...</span>
+                                            <span className="flex items-center gap-2"><i className="fas fa-spinner fa-spin text-4xl"></i> Processing...</span>
                                         ) : (
-                                            <span className="flex items-center gap-2"><i data-lucide="check-circle" className="w-5 h-5"></i> Place Order</span>
+                                            <span className="flex items-center gap-2"><i className="fas fa-check-circle text-xl"></i> Place Order</span>
                                         )}
                                     </button>
                                 </div>
