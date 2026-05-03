@@ -331,7 +331,7 @@
                 // --- SWITCHED TO HTML FORMATTING WITH SECURE SANITIZATION ---
                 // Using escapeHtml() ensures special characters like '&' don't crash Telegram
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
                 telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
