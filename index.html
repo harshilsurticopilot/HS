@@ -340,7 +340,7 @@
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
                 // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
-                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (#${orderId}).\n\n*Order Details:*\n`;
+                let waText = `Hello ${checkoutData.name},\n\nWe have received your order (${orderId}).\n\n*Order Details:*\n`;
                 cart.forEach((item, index) => {
                     waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
                 });
@@ -356,7 +356,7 @@
                 // --- SWITCHED TO HTML FORMATTING WITH SECURE SANITIZATION ---
                 // Using escapeHtml() ensures special characters like '&' don't crash Telegram
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
                 telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
@@ -379,11 +379,8 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            // Pass the message safely
+                            // Cleanly sending only one message payload to avoid Make.com confusion
                             telegramMessage: telegramMsg,
-                            text: telegramMsg,
-                            message: telegramMsg,
-                            
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
                             orderId: orderId,
