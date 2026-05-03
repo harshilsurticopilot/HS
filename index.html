@@ -66,9 +66,8 @@
         const { useState, useEffect, useMemo } = React;
 
         // --- WEBHOOK CONFIGURATION (SECURE) ---
-        // Replace this with your webhook URL from Make.com
+        // Replace this with your actual webhook URL from Make.com
         const ORDER_WEBHOOK_URL = 'https://hook.us2.make.com/c5b9g1rprsaqe3qn3apeb6nr0hhmycj9';
-
 
         const Toast = ({ message, isVisible }) => {
             if (!isVisible) return null;
@@ -321,6 +320,13 @@
 
             const handleCheckoutSubmit = async (e) => {
                 e.preventDefault();
+                
+                // Safety Check: Prevent submitting if placeholder URL is still in use
+                if (ORDER_WEBHOOK_URL.includes('YOUR_WEBHOOK_ID')) {
+                    alert("Developer Error: Please replace 'YOUR_WEBHOOK_ID' in the code with your actual Make.com Webhook URL.");
+                    return;
+                }
+
                 setIsSubmitting(true);
 
                 let message = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
@@ -357,10 +363,13 @@
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        alert("Error placing order. Please check your Webhook configuration.");
+                        // Make.com rejected the request (e.g. invalid setup or scenario turned off)
+                        alert(`Webhook Error (${response.status}): Make.com rejected the request. Please check your Make.com history.`);
                     }
                 } catch (error) {
-                    alert("Network error. Please try again.");
+                    console.error("Checkout Fetch Error:", error);
+                    // Network errors usually indicate CORS blocking because Make.com was inactive/invalid URL
+                    alert("Network Error: Could not reach Make.com.\n\nPlease ensure your Make.com scenario is turned ON ('Run once' or active).");
                 } finally {
                     setIsSubmitting(false);
                 }
