@@ -216,7 +216,7 @@
                         setProducts(parsedProducts);
                         setIsLoading(false);
                     } catch (err) {
-                        console.error(err);
+                        console.error("Failed to load CSV store data:", err);
                         setDataError(err.message || "Could not load store data.");
                         setIsLoading(false);
                     }
@@ -318,8 +318,9 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
+                // --- SWITCHED TO HTML FORMATTING FOR TELEGRAM VIA MAKE.COM ---
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${checkoutData.name}\n`;
                 telegramMsg += `<b>Phone:</b> ${checkoutData.phone}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${checkoutData.email}\n`;
@@ -340,7 +341,11 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            // Pass the message in multiple variable names to prevent Make.com setup errors
+                            text: telegramMsg,
+                            message: telegramMsg,
                             telegramMessage: telegramMsg,
+                            
                             customerName: checkoutData.name,
                             customerPhone: checkoutData.phone,
                             orderId: orderId,
@@ -349,16 +354,18 @@
                     });
 
                     if (response.ok) {
-                        alert(`Order ${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
+                        alert(`Order #${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
                         setCart([]);
                         setIsCheckoutOpen(false);
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        alert(`Webhook Error (${response.status}): Make.com rejected the request. Please check your Make.com history.`);
+                        const errDetails = await response.text();
+                        console.error(`Webhook Error (${response.status}):\n${errDetails}`);
+                        alert(`Webhook Error (${response.status}): Make.com rejected the request. Please check your Make.com history or settings.`);
                     }
                 } catch (error) {
-                    console.error("Checkout Fetch Error:", error);
+                    console.error("Checkout Network Error:", error);
                     alert("Network Error: Could not reach Make.com.\n\n1. Ensure your Make.com scenario is turned ON ('Run once' or active).\n2. If you are using an AdBlocker or Brave Browser, it may block webhook URLs. Try pausing shields.");
                 } finally {
                     setIsSubmitting(false);
