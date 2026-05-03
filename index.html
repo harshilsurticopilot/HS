@@ -65,9 +65,9 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- TELEGRAM CONFIGURATION ---
-        const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'; 
-        const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID';     
+        // --- WEBHOOK CONFIGURATION (SECURE) ---
+        // Replace this with your webhook URL from Make.com
+        const ORDER_WEBHOOK_URL = 'https://hook.us1.make.com/YOUR_WEBHOOK_ID';
 
         const Toast = ({ message, isVisible }) => {
             if (!isVisible) return null;
@@ -81,33 +81,49 @@
             );
         };
 
-        // --- NEW: Smart Text Formatter for DB/CSV Descriptions ---
+        // --- UPGRADED: Smart Text Formatter for DB/CSV Descriptions ---
         const FormattedText = ({ text }) => {
             if (!text) return null;
             
-            // Clean up text: convert double-space bullets to newlines, and multi-spaces to paragraphs
-            let cleanText = text.replace(/\s{2,}•/g, '\n•').replace(/\s{4,}/g, '\n\n');
-            const paragraphs = cleanText.split(/\n+/).map(p => p.trim()).filter(p => p);
+            // 1. Normalize line breaks (handles escaped \n, \r\n, and HTML <br>)
+            let cleanText = text
+                .replace(/\\n/g, '\n')
+                .replace(/\r\n/g, '\n')
+                .replace(/<br\s*\/?>/gi, '\n');
+                
+            // 2. Force a newline before bullets and specific emojis if they are merged into one line
+            cleanText = cleanText.replace(/([^\n])\s*(•|🌾|📦|✅|👉|✨|- )/g, '$1\n$2');
+
+            // 3. Split into paragraphs and remove empty lines
+            const paragraphs = cleanText.split('\n').map(p => p.trim()).filter(p => p);
 
             return (
-                <div className="bg-[#fcfdfc] p-5 md:p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3">
+                <div className="bg-[#fcfdfc] p-4 md:p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2.5">
                     {paragraphs.map((para, idx) => {
-                        // Render Bullet Points Properly
+                        // Render Bullet Points
                         if (para.startsWith('•') || para.startsWith('-')) {
                             return (
-                                <div key={idx} className="flex items-start gap-3 ml-2 md:ml-4 mt-1">
+                                <div key={idx} className="flex items-start gap-3 ml-2 md:ml-4 mt-0.5">
                                     <i className="fas fa-circle text-primary mt-2 opacity-60" style={{ fontSize: '6px' }}></i>
                                     <span className="text-gray-700 flex-1 leading-relaxed">{para.substring(1).trim()}</span>
                                 </div>
                             );
                         } 
-                        // Render Sub-headings (e.g. "🌾 Key Benefits:")
-                        else if (para.length < 80 && (para.endsWith(':') || para.includes(': '))) {
+                        // Render lines starting with specific Emojis as bold list items
+                        else if (para.match(/^(🌾|📦|✅|👉|✨)/)) {
                             return (
-                                <strong key={idx} className="text-gray-800 block mt-3 text-[1.05rem] tracking-tight">{para}</strong>
+                                <div key={idx} className="flex items-start gap-3 mt-2">
+                                    <span className="text-gray-800 font-semibold leading-relaxed">{para}</span>
+                                </div>
                             );
                         } 
-                        // Render Standard Paragraphs
+                        // Render Sub-headings (short lines ending with a colon)
+                        else if (para.length < 60 && para.endsWith(':')) {
+                            return (
+                                <strong key={idx} className="text-gray-800 block mt-2 text-[1.05rem] tracking-tight">{para}</strong>
+                            );
+                        } 
+                        // Standard Paragraph
                         else {
                             return <p key={idx} className="text-gray-700 leading-relaxed">{para}</p>;
                         }
@@ -315,14 +331,15 @@
                 message += `\n📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
 
                 try {
-                    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-                    const response = await fetch(url, {
+                    // Send data to the secure webhook
+                    const response = await fetch(ORDER_WEBHOOK_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            chat_id: TELEGRAM_CHAT_ID,
-                            text: message,
-                            parse_mode: 'Markdown'
+                            message: message,
+                            customerName: checkoutData.name,
+                            customerPhone: checkoutData.phone,
+                            orderTotal: cartTotal
                         })
                     });
 
@@ -333,7 +350,7 @@
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        alert("Error placing order. Please check your Bot configurations.");
+                        alert("Error placing order. Please check your Make.com Webhook configuration.");
                     }
                 } catch (error) {
                     alert("Network error. Please try again.");
