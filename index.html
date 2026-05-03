@@ -319,7 +319,7 @@
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
                 let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
+                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
                 telegramMsg += `<b>Customer:</b> ${checkoutData.name}\n`;
                 telegramMsg += `<b>Phone:</b> ${checkoutData.phone}\n`;
                 if(checkoutData.email) telegramMsg += `<b>Email:</b> ${checkoutData.email}\n`;
@@ -349,7 +349,7 @@
                     });
 
                     if (response.ok) {
-                        alert(`Order #${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
+                        alert(`Order ${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
                         setCart([]);
                         setIsCheckoutOpen(false);
                         setIsCartOpen(false);
