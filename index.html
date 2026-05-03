@@ -81,44 +81,39 @@
             );
         };
 
-        // --- UPGRADED: Smart Text Formatter for DB/CSV Descriptions ---
+        // --- PERFECTED: Smart Text Formatter for Database Descriptions ---
         const FormattedText = ({ text }) => {
             if (!text) return null;
             
-            // 1. Normalize line breaks (handles escaped \n, \r\n, and HTML <br>)
-            let cleanText = text
-                .replace(/\\n/g, '\n')
-                .replace(/\r\n/g, '\n')
-                .replace(/<br\s*\/?>/gi, '\n');
-                
-            // 2. Force a newline before bullets and specific emojis if they are merged into one line
-            cleanText = cleanText.replace(/([^\n])\s*(•|🌾|📦|✅|👉|✨|- )/g, '$1\n$2');
+            // 1. Normalize line breaks and <br> tags
+            let cleanText = text.replace(/<br\s*\/?>/gi, '\n').replace(/\\n/g, '\n');
+            
+            // 2. Convert multiple spaces (2 or more) into line breaks. 
+            // In CSV exports, indents/line breaks are often saved as multiple blank spaces.
+            cleanText = cleanText.replace(/\s{2,}/g, '\n');
+            
+            // 3. Force newline before bullet points or emojis if they are glued to previous text
+            cleanText = cleanText.replace(/([a-zA-Z0-9\.])\s+(?=[•\-🌾📦✅👉✨])/g, '$1\n');
 
-            // 3. Split into paragraphs and remove empty lines
+            // 4. Split into clean paragraphs
             const paragraphs = cleanText.split('\n').map(p => p.trim()).filter(p => p);
 
             return (
-                <div className="bg-[#fcfdfc] p-4 md:p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-2.5">
+                <div className="bg-[#fcfdfc] p-4 md:p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3 text-sm md:text-base">
                     {paragraphs.map((para, idx) => {
-                        // Render Bullet Points
+                        // Render Bullet Points cleanly
                         if (para.startsWith('•') || para.startsWith('-')) {
+                            const bulletText = para.substring(1).trim();
+                            if (!bulletText) return null;
                             return (
-                                <div key={idx} className="flex items-start gap-3 ml-2 md:ml-4 mt-0.5">
-                                    <i className="fas fa-circle text-primary mt-2 opacity-60" style={{ fontSize: '6px' }}></i>
-                                    <span className="text-gray-700 flex-1 leading-relaxed">{para.substring(1).trim()}</span>
+                                <div key={idx} className="flex items-start gap-3 ml-2 md:ml-4">
+                                    <i className="fas fa-circle text-primary mt-1.5 md:mt-2" style={{ fontSize: '6px' }}></i>
+                                    <span className="text-gray-700 flex-1 leading-relaxed">{bulletText}</span>
                                 </div>
                             );
                         } 
-                        // Render lines starting with specific Emojis as bold list items
-                        else if (para.match(/^(🌾|📦|✅|👉|✨)/)) {
-                            return (
-                                <div key={idx} className="flex items-start gap-3 mt-2">
-                                    <span className="text-gray-800 font-semibold leading-relaxed">{para}</span>
-                                </div>
-                            );
-                        } 
-                        // Render Sub-headings (short lines ending with a colon)
-                        else if (para.length < 60 && para.endsWith(':')) {
+                        // Render lines starting with Emojis or ending with colons as bold subheadings
+                        else if (para.match(/^(🌾|📦|✅|👉|✨)/) || para.endsWith(':')) {
                             return (
                                 <strong key={idx} className="text-gray-800 block mt-2 text-[1.05rem] tracking-tight">{para}</strong>
                             );
@@ -350,7 +345,7 @@
                         setIsCartOpen(false);
                         setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     } else {
-                        alert("Error placing order. Please check your Make.com Webhook configuration.");
+                        alert("Error placing order. Please check your Webhook configuration.");
                     }
                 } catch (error) {
                     alert("Network error. Please try again.");
