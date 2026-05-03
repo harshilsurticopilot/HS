@@ -303,7 +303,7 @@
             const minFinalAmount = cartTotal + minShipping;
             const maxFinalAmount = cartTotal + maxShipping;
             
-            // UI Formatting for ranges (removed weight display)
+            // UI Formatting for ranges
             const shippingDisplay = cartCount > 0 ? `₹${minShipping} - ₹${maxShipping}` : "Free";
             const totalDisplay = cartCount > 0 ? `₹${minFinalAmount} - ₹${maxFinalAmount}` : "₹0";
 
@@ -319,22 +319,23 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
-                let telegramMsg = `🛒 *NEW ORDER RECEIVED* 🛒\n\n`;
-                telegramMsg += `*Order ID:* #${orderId}\n`;
-                telegramMsg += `*Customer:* ${checkoutData.name}\n`;
-                telegramMsg += `*Phone:* ${checkoutData.phone}\n`;
-                if(checkoutData.email) telegramMsg += `*Email:* ${checkoutData.email}\n`;
-                telegramMsg += `*Address:* ${checkoutData.address}\n\n`;
-                telegramMsg += `*Items Ordered:*\n`;
+                // --- SWITCHED TO HTML FORMATTING FOR TELEGRAM ---
+                let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
+                telegramMsg += `<b>Order ID:</b> #${orderId}\n`;
+                telegramMsg += `<b>Customer:</b> ${checkoutData.name}\n`;
+                telegramMsg += `<b>Phone:</b> ${checkoutData.phone}\n`;
+                if(checkoutData.email) telegramMsg += `<b>Email:</b> ${checkoutData.email}\n`;
+                telegramMsg += `<b>Address:</b> ${checkoutData.address}\n\n`;
+                telegramMsg += `<b>Items Ordered:</b>\n`;
                 
                 cart.forEach((item, index) => {
                     telegramMsg += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
                 });
 
-                telegramMsg += `\n*Subtotal:* ₹${cartTotal.toFixed(0)}\n`;
-                telegramMsg += `*Est. Shipping:* ${shippingDisplay}\n`;
-                telegramMsg += `*Est. Final Total:* ${totalDisplay}\n\n`;
-                telegramMsg += `📲 *Message Customer on WhatsApp:*\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
+                telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
+                telegramMsg += `<b>Est. Shipping:</b> ${shippingDisplay}\n`;
+                telegramMsg += `<b>Est. Final Total:</b> ${totalDisplay}\n\n`;
+                telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\nhttps://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}`;
 
                 try {
                     const response = await fetch(ORDER_WEBHOOK_URL, {
