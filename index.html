@@ -370,11 +370,29 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
-                // --- GENERATE PRE-FILLED WHATSAPP MESSAGE (NO TRUNCATION) ---
+                // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
+                // WhatsApp URLs have character limits depending on the phone's OS.
+                // We truncate the WhatsApp link safely, but send the FULL list to Telegram.
+                let waItemsText = '';
+                let waHiddenCount = 0;
+                for (let i = 0; i < cart.length; i++) {
+                    const item = cart[i];
+                    const waLine = `${i + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
+                    
+                    // Cap the WhatsApp link at ~1500 characters to prevent the OS from rejecting the URL
+                    if (waItemsText.length + waLine.length > 1500) {
+                        waHiddenCount = cart.length - i;
+                        break;
+                    }
+                    waItemsText += waLine;
+                }
+
+                if (waHiddenCount > 0) {
+                    waItemsText += `\n...and ${waHiddenCount} more items. (Check Telegram for full details)\n`;
+                }
+
                 let waText = `Hello ${checkoutData.name},\n\nWe have received your order (${orderId}).\n\n*Order Details:*\n`;
-                cart.forEach((item, index) => {
-                    waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
-                });
+                waText += waItemsText;
                 waText += `\n*Subtotal:* ₹${cartTotal.toFixed(0)}\n`;
                 waText += `*Est. Shipping:* ${shippingDisplay}\n`;
                 waText += `*Est. Final Total:* ${totalDisplay}\n\n`;
@@ -386,9 +404,8 @@
 
                 try {
                     // --- SMART TELEGRAM CHUNKING TO BYPASS 4096 CHAR LIMIT ---
-                    // Telegram crashes if a message exceeds 4096 characters.
-                    // We split massive orders into parts of ~30 items per message to guarantee delivery.
-                    const itemsPerChunk = 30;
+                    // We split massive orders into parts of ~20 items per message to guarantee delivery.
+                    const itemsPerChunk = 20;
                     const numChunks = Math.ceil(cart.length / itemsPerChunk);
 
                     for (let chunkIdx = 0; chunkIdx < numChunks; chunkIdx++) {
@@ -418,7 +435,8 @@
                             telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
                             telegramMsg += `<b>Est. Shipping:</b> ${escapeHtml(shippingDisplay)}\n`;
                             telegramMsg += `<b>Est. Final Total:</b> ${escapeHtml(totalDisplay)}\n\n`;
-                            telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\n<a href="${waLink}">Click here to message customer</a>\n\nRaw Link:\n${waLink}`;
+                            // Removed the massive "Raw Link" printing to prevent hitting Telegram's character limits
+                            telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\n<a href="${waLink}">Click here to open WhatsApp</a>`;
                         }
 
                         // Send chunk to webhook
@@ -435,9 +453,9 @@
                             })
                         });
 
-                        // Add a slight delay between chunks to ensure Telegram receives them in order
-                        if (numChunks > 1) {
-                            await new Promise(resolve => setTimeout(resolve, 600));
+                        // Increased delay to 1.5 seconds so Google Apps Script doesn't rate-limit consecutive requests
+                        if (numChunks > 1 && chunkIdx < numChunks - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 1500));
                         }
                     }
 
