@@ -176,6 +176,7 @@
             const [checkoutData, setCheckoutData] = useState({ name: '', phone: '', email: '', address: '' });
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [toastConfig, setToastConfig] = useState({ visible: false, message: '' });
+            const [isImageZoomed, setIsImageZoomed] = useState(false);
 
             // New states for tracking the collapsible menus
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -428,19 +429,20 @@
                     setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     
                 } catch (error) {
-                    console.error("Checkout Network Error:", error);
-                    alert("Network Error: Could not reach the server. Please check your internet connection and try again.");
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
+                console.error("Checkout Network Error:", error);
+                alert("Network Error: Could not reach the server. Please check your internet connection and try again.");
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
 
-            const resetViews = () => {
-                setSelectedProduct(null);
-            };
+        const resetViews = () => {
+            setSelectedProduct(null);
+            setIsImageZoomed(false);
+        };
 
-            if (isLoading) {
-                return (
+        if (isLoading) {
+            return (
                     <div className="flex h-full w-full items-center justify-center bg-bg-light text-primary flex-col gap-4">
                         <i className="fas fa-spinner fa-spin text-4xl"></i>
                         <p className="font-semibold text-lg">Loading Catalog...</p>
@@ -746,20 +748,26 @@
                                     </button>
                                     
                                     <div className="flex flex-col md:flex-row gap-5 md:gap-14 w-full">
-                                        {/* Product Image Section */}
-                                        <div className="w-full md:w-1/2">
-                                            <div className="bg-bg-card-img rounded-xl md:rounded-2xl border border-border-soft p-4 md:p-8 h-56 sm:h-80 md:h-[500px] flex items-center justify-center shadow-inner">
-                                                <img 
-                                                    src={selectedProduct.image} 
-                                                    alt={selectedProduct.name} 
-                                                    className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform duration-500"
-                                                    onError={(e) => { e.target.src = 'https://via.placeholder.com/500x500.png?text=No+Image'; }}
-                                                />
+                                    {/* Product Image Section */}
+                                    <div className="w-full md:w-1/2">
+                                        <div 
+                                            className="bg-bg-card-img rounded-xl md:rounded-2xl border border-border-soft p-4 md:p-8 h-56 sm:h-80 md:h-[500px] flex items-center justify-center shadow-inner relative cursor-zoom-in group"
+                                            onClick={() => setIsImageZoomed(true)}
+                                        >
+                                            <img 
+                                                src={selectedProduct.image} 
+                                                alt={selectedProduct.name} 
+                                                className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
+                                                onError={(e) => { e.target.src = 'https://via.placeholder.com/500x500.png?text=No+Image'; }}
+                                            />
+                                            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-gray-700 rounded-full w-8 h-8 md:w-10 md:h-10 flex items-center justify-center shadow-sm opacity-80 group-hover:opacity-100 transition-opacity" title="Zoom Image">
+                                                <i className="fas fa-search-plus text-sm md:text-base"></i>
                                             </div>
                                         </div>
-                                        
-                                        {/* Product Info Section */}
-                                        <div className="w-full md:w-1/2 flex flex-col justify-start pt-1 md:pt-2">
+                                    </div>
+                                    
+                                    {/* Product Info Section */}
+                                    <div className="w-full md:w-1/2 flex flex-col justify-start pt-1 md:pt-2">
                                             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 leading-tight mb-2 md:mb-3">{selectedProduct.name}</h1>
                                             
                                             {selectedProduct.shortDescription && (
@@ -992,27 +1000,46 @@
                                         Cancel
                                     </button>
                                     <button 
-                                        type="submit"
-                                        form="checkout-form"
-                                        disabled={isSubmitting}
-                                        className="flex-1 py-3 md:py-3.5 bg-primary text-white rounded-xl font-bold shadow hover:bg-[#20503b] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm md:text-base"
-                                    >
-                                        {isSubmitting ? (
-                                            <span className="flex items-center gap-2"><i className="fas fa-spinner fa-spin text-lg md:text-xl"></i> Processing...</span>
-                                        ) : (
-                                            <span className="flex items-center gap-2"><i className="fas fa-check-circle text-lg md:text-xl"></i> Place Order</span>
-                                        )}
-                                    </button>
-                                </div>
+                                    type="submit"
+                                    form="checkout-form"
+                                    disabled={isSubmitting}
+                                    className="flex-1 py-3 md:py-3.5 bg-primary text-white rounded-xl font-bold shadow hover:bg-[#20503b] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm md:text-base"
+                                >
+                                    {isSubmitting ? (
+                                        <span className="flex items-center gap-2"><i className="fas fa-spinner fa-spin text-lg md:text-xl"></i> Processing...</span>
+                                    ) : (
+                                        <span className="flex items-center gap-2"><i className="fas fa-check-circle text-lg md:text-xl"></i> Place Order</span>
+                                    )}
+                                </button>
                             </div>
                         </div>
-                    )}
-                </div>
-            );
-        };
+                    </div>
+                )}
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+                {/* FULLSCREEN IMAGE ZOOM OVERLAY */}
+                {isImageZoomed && selectedProduct && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-[toastFadeInUp_0.2s_ease-out]" onClick={() => setIsImageZoomed(false)}>
+                        <button 
+                            className="absolute top-4 right-4 md:top-8 md:right-8 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center transition-all z-10"
+                            onClick={(e) => { e.stopPropagation(); setIsImageZoomed(false); }}
+                        >
+                            <i className="fas fa-times text-xl md:text-2xl"></i>
+                        </button>
+                        <img 
+                            src={selectedProduct.image} 
+                            alt={selectedProduct.name} 
+                            className="max-w-full max-h-full object-contain select-none"
+                            onClick={(e) => e.stopPropagation()} 
+                            onError={(e) => { e.target.src = 'https://via.placeholder.com/800x800.png?text=No+Image'; }}
+                        />
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
 </body>
 </html>
