@@ -370,7 +370,7 @@
 
                 const orderId = Math.floor(100000 + Math.random() * 900000);
 
-                // --- GENERATE PRE-FILLED WHATSAPP MESSAGE ---
+                // --- GENERATE PRE-FILLED WHATSAPP MESSAGE (NO TRUNCATION) ---
                 let waText = `Hello ${checkoutData.name},\n\nWe have received your order (${orderId}).\n\n*Order Details:*\n`;
                 cart.forEach((item, index) => {
                     waText += `${index + 1}. ${item.name} - ${item.qty} x ₹${item.price.toFixed(0)}\n`;
@@ -384,60 +384,79 @@
                 const encodedWaText = encodeURIComponent(waText);
                 const waLink = `https://wa.me/91${checkoutData.phone.replace(/[^0-9]/g, '')}?text=${encodedWaText}`;
 
-                // --- HTML FORMATTING WITH SECURE SANITIZATION ---
-                let telegramMsg = `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
-                telegramMsg += `<b>Order ID:</b> ${orderId}\n`;
-                telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
-                telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
-                if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
-                telegramMsg += `<b>Address:</b> ${escapeHtml(checkoutData.address)}\n\n`;
-                telegramMsg += `<b>Items Ordered:</b>\n`;
-                
-                cart.forEach((item, index) => {
-                    telegramMsg += `${index + 1}. ${escapeHtml(item.name)} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
-                });
-
-                telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
-                telegramMsg += `<b>Est. Shipping:</b> ${escapeHtml(shippingDisplay)}\n`;
-                telegramMsg += `<b>Est. Final Total:</b> ${escapeHtml(totalDisplay)}\n\n`;
-                
-                // Add the Clickable pre-filled WhatsApp link to the Telegram payload
-                telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\n<a href="${waLink}">Click here to message customer</a>\n\nRaw Link:\n${waLink}`;
-
                 try {
-                    // CRITICAL FIX: "mode: 'no-cors'" stops the browser from blocking Google's redirect.
-                    // When using 'no-cors', the response is opaque, meaning we can't read response.ok or response.json().
-                    // We just fire it off securely and assume success if the network didn't fail.
-                    await fetch(ORDER_WEBHOOK_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            telegramMessage: telegramMsg,
-                            customerName: checkoutData.name,
-                            customerPhone: checkoutData.phone,
-                            orderId: orderId,
-                            orderTotal: totalDisplay
-                        })
-                    });
+                    // --- SMART TELEGRAM CHUNKING TO BYPASS 4096 CHAR LIMIT ---
+                    // Telegram crashes if a message exceeds 4096 characters.
+                    // We split massive orders into parts of ~30 items per message to guarantee delivery.
+                    const itemsPerChunk = 30;
+                    const numChunks = Math.ceil(cart.length / itemsPerChunk);
+
+                    for (let chunkIdx = 0; chunkIdx < numChunks; chunkIdx++) {
+                        const chunkItems = cart.slice(chunkIdx * itemsPerChunk, (chunkIdx + 1) * itemsPerChunk);
+                        
+                        let telegramMsg = '';
+                        
+                        if (chunkIdx === 0) {
+                            telegramMsg += `🛒 <b>NEW ORDER RECEIVED</b> 🛒\n\n`;
+                            telegramMsg += `<b>Order ID:</b> ${orderId} ${numChunks > 1 ? `(Part ${chunkIdx + 1} of ${numChunks})` : ''}\n`;
+                            telegramMsg += `<b>Customer:</b> ${escapeHtml(checkoutData.name)}\n`;
+                            telegramMsg += `<b>Phone:</b> ${escapeHtml(checkoutData.phone)}\n`;
+                            if(checkoutData.email) telegramMsg += `<b>Email:</b> ${escapeHtml(checkoutData.email)}\n`;
+                            telegramMsg += `<b>Address:</b> ${escapeHtml(checkoutData.address)}\n\n`;
+                            telegramMsg += `<b>Items Ordered:</b>\n`;
+                        } else {
+                            telegramMsg += `🛒 <b>ORDER ${orderId} (Part ${chunkIdx + 1} of ${numChunks})</b> 🛒\n\n`;
+                            telegramMsg += `<b>Items Continued:</b>\n`;
+                        }
+                        
+                        chunkItems.forEach((item, idx) => {
+                            const globalIdx = (chunkIdx * itemsPerChunk) + idx + 1;
+                            telegramMsg += `${globalIdx}. ${escapeHtml(item.name)} - ${item.qty} x ₹${item.price.toFixed(0)} = ₹${(item.qty * item.price).toFixed(0)}\n`;
+                        });
+
+                        if (chunkIdx === numChunks - 1) {
+                            telegramMsg += `\n<b>Subtotal:</b> ₹${cartTotal.toFixed(0)}\n`;
+                            telegramMsg += `<b>Est. Shipping:</b> ${escapeHtml(shippingDisplay)}\n`;
+                            telegramMsg += `<b>Est. Final Total:</b> ${escapeHtml(totalDisplay)}\n\n`;
+                            telegramMsg += `📲 <b>Message Customer on WhatsApp:</b>\n<a href="${waLink}">Click here to message customer</a>\n\nRaw Link:\n${waLink}`;
+                        }
+
+                        // Send chunk to webhook
+                        await fetch(ORDER_WEBHOOK_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({
+                                telegramMessage: telegramMsg,
+                                customerName: checkoutData.name,
+                                customerPhone: checkoutData.phone,
+                                orderId: orderId,
+                                orderTotal: totalDisplay
+                            })
+                        });
+
+                        // Add a slight delay between chunks to ensure Telegram receives them in order
+                        if (numChunks > 1) {
+                            await new Promise(resolve => setTimeout(resolve, 600));
+                        }
+                    }
 
                     // Since we used 'no-cors', we bypass the CORS block and show success immediately.
-                    alert(`Order #${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
+                    alert(`Order ${orderId} placed successfully! We will contact you soon on WhatsApp to confirm shipping.`);
                     setCart([]); // This automatically updates localStorage to be empty
                     setIsCheckoutOpen(false);
                     setIsCartOpen(false);
                     setCheckoutData({ name: '', phone: '', email: '', address: '' });
                     
                 } catch (error) {
-                console.error("Checkout Network Error:", error);
-                alert("Network Error: Could not reach the server. Please check your internet connection and try again.");
-            } finally {
-                setIsSubmitting(false);
-            }
-        };
+                    console.error("Checkout Network Error:", error);
+                    alert("Network Error: Could not reach the server. Please check your internet connection and try again.");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
 
-        const resetViews = () => {
-            setSelectedProduct(null);
+            const resetViews = () => {
             setIsImageZoomed(false);
         };
 
