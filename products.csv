@@ -129,11 +129,11 @@ ProductID,CategoryID,ProductName,Price,Description,HowToUse,Dosage,Stock,MainIma
 134,NULL,Capsicum yellow wonder (1 seed packet BIOCARVE),40,"Premium BIOCARVE trusted brand seeds - high germination, vibrant blooms, ideal for terrace and balcony gardening.","Sow in seed trays or directly in prepared soil, keep moist until germination",Provide sun and keep soil moderately moist.,999,/Images/Products/capsicum yellow wonder.jpg.jpeg,1,15,Seeds for kitchen gardening,65
 135,NULL,Khurpi (2 inch),65,"Ideal for weeding & soil loosening
 Strong blade removes weeds from roots
-Best for pots & small beds","Metal body, PVC rubber grip",,999,/Images/Products/khurpi 2 inch.jpeg,1,160,,90
+Best for pots & small beds",,,999,/Images/Products/khurpi 2 inch.jpeg,1,160,"Metal body, PVC rubber grip",90
 136,NULL,Hand Trowel small,70,"Great for seedlings & small plants
 Compact & easy to use
-Best for indoor & small pots","Metal body, PVC handle",,999,/Images/Products/pvc trowel small.jpeg,1,90,,100
+Best for indoor & small pots",,,999,/Images/Products/pvc trowel small.jpeg,1,90,"Metal body, PVC handle",100
 137,NULL,Hand Trowel big,75,"Perfect for digging & transplanting
 Large scoop for faster work
-Best for big pots & garden beds","Metal body, PVC handle",,999,/Images/Products/pvc trowel big.jpeg,1,160,,110
-138,NULL,"Combo (Khurpi 2 inch, Hand trowel small and big)",199,"Essential gardening tools for every home – Khurpi, Big Trowel & Small Trowel available now! Save with combo",,,999,/Images/Products/tool combo pic.png,1,420,,300
+Best for big pots & garden beds",,,999,/Images/Products/pvc trowel big.jpeg,1,160,"Metal body, PVC handle",110
+138,NULL,"Combo (Khurpi 2 inch, Hand trowel small and big)",199,"Essential gardening tools for every home – Khurpi, Big Trowel & Small Trowel available now! Save with combo",,,999,/Images/Products/tool combo pic.png,1,420,Essential garden tools,300
