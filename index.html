@@ -284,6 +284,70 @@
                 loadStoreData();
             }, []);
 
+            // --- URL HASH ROUTING (For deep linking and sharing) ---
+            
+            // 1. Sync State to URL Hash
+            useEffect(() => {
+                if (isLoading) return;
+                
+                if (selectedProduct) {
+                    window.location.hash = `product=${selectedProduct.id}`;
+                } else if (selectedCategory !== null) {
+                    window.location.hash = `category=${selectedCategory}`;
+                } else {
+                    // Remove hash cleanly without scrolling to top
+                    window.history.replaceState(null, null, window.location.pathname + window.location.search);
+                }
+            }, [selectedProduct, selectedCategory, isLoading]);
+
+            // 2. Sync URL Hash to State (On Load and Browser Back/Forward buttons)
+            useEffect(() => {
+                if (isLoading || products.length === 0) return;
+
+                const handleHashChange = () => {
+                    const hash = window.location.hash.replace('#', '');
+                    
+                    if (hash.startsWith('product=')) {
+                        const pid = parseInt(hash.split('=')[1]);
+                        const p = products.find(prod => prod.id === pid);
+                        if (p) {
+                            setSelectedProduct(prev => prev?.id === pid ? prev : p);
+                            
+                            // Auto-expand the sidebar parent category so the user sees where they are
+                            if (p.categoryIds && p.categoryIds.length > 0) {
+                                const cat = categories.find(c => c.id === p.categoryIds[0]);
+                                if (cat && cat.parentId) {
+                                    setExpandedParents(prev => ({ ...prev, [cat.parentId]: true }));
+                                }
+                            }
+                        }
+                    } else if (hash.startsWith('category=')) {
+                        const cid = parseInt(hash.split('=')[1]);
+                        if (!isNaN(cid)) {
+                            setSelectedProduct(null);
+                            setSelectedCategory(prev => prev === cid ? prev : cid);
+                            
+                            // Auto-expand the sidebar parent category
+                            const cat = categories.find(c => c.id === cid);
+                            if (cat && cat.parentId) {
+                                setExpandedParents(prev => ({ ...prev, [cat.parentId]: true }));
+                            }
+                        }
+                    } else if (hash === '') {
+                        setSelectedProduct(null);
+                        setSelectedCategory(null);
+                    }
+                };
+
+                // Trigger on initial load after data is ready to catch shared links
+                handleHashChange();
+
+                // Listen for browser Back/Forward navigation
+                window.addEventListener('hashchange', handleHashChange);
+                return () => window.removeEventListener('hashchange', handleHashChange);
+            }, [isLoading, products, categories]);
+
+
             const showToast = (message) => {
                 setToastConfig({ visible: true, message });
                 setTimeout(() => setToastConfig(prev => ({ ...prev, visible: false })), 3000);
